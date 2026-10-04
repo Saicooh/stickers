@@ -23,6 +23,8 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeoutException
+import kotlin.math.ceil
+import kotlin.math.roundToLong
 import kotlin.math.max
 import kotlin.math.min
 
@@ -80,12 +82,14 @@ class CropAndScale {
         cropRight: Float,
         cropBottom: Float,
         stretch: Boolean,
-        quarterTurns: Int
+        quarterTurns: Int,
+        speed: Double = 1.0
     ) {
         require(cropLeft.isFinite() && cropTop.isFinite() && cropRight.isFinite() && cropBottom.isFinite() &&
                 cropLeft >= 0f && cropTop >= 0f && cropRight <= 1f && cropBottom <= 1f &&
                 cropRight > cropLeft && cropBottom > cropTop) { "Invalid video crop" }
         require(quarterTurns in 0..3) { "Invalid video rotation" }
+        require(speed.isFinite() && speed in 1.0..2.0) { "Invalid video speed" }
         if (_status.value == State.RUNNING) {
             Log.w(LOG_TAG, "Transcoding is already in progress. Ignoring new request.")
             return
@@ -97,7 +101,7 @@ class CropAndScale {
             try {
                 doTranscode(
                     inputFile, outputFile, startTimeUs, endTimeUs, maxFps,
-                    cropLeft, cropTop, cropRight, cropBottom, stretch, quarterTurns
+                    cropLeft, cropTop, cropRight, cropBottom, stretch, quarterTurns, speed
                 )
                 _status.value = State.SUCCESS
                 Log.d(LOG_TAG, "Transcoding finished successfully.")
@@ -140,7 +144,8 @@ class CropAndScale {
         cropRight: Float,
         cropBottom: Float,
         stretch: Boolean,
-        quarterTurns: Int
+        quarterTurns: Int,
+        speed: Double
     ) {
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
@@ -180,8 +185,8 @@ class CropAndScale {
             } else {
                 24
             }
-            val targetFrameRate = maxFps?.let { min(it, originalFrameRate) } ?: originalFrameRate
-            val totalFrames = ((trimmedDurationUs / 1_000_000.0) * targetFrameRate).toInt()
+            val targetFrameRate = min(maxFps, ceil(originalFrameRate * speed).toInt()).coerceAtLeast(1)
+            val totalFrames = ((trimmedDurationUs / speed / 1_000_000.0) * targetFrameRate).toInt()
             _progress.value = ProgressState(totalFrames = totalFrames)
 
             val sourceRotation = if (inputFormat.containsKey(MediaFormat.KEY_ROTATION)) {
@@ -276,7 +281,7 @@ class CropAndScale {
             var isInputDone = false
             var isDecoderOutputDone = false
             var currentFrame = 0
-            var lastRenderedTimestampNs = -1L
+            var lastRenderedSlot = -1L
             val frameIntervalNs = 1_000_000_000L / targetFrameRate
 
             while (!isDecoderOutputDone && currentCoroutineContext().isActive) {
@@ -309,16 +314,21 @@ class CropAndScale {
                     }
 
                     val isFrameInRange = decoderBufferInfo.size > 0 &&
-                            decoderBufferInfo.presentationTimeUs >= effectiveStartTimeUs
+                            decoderBufferInfo.presentationTimeUs >= effectiveStartTimeUs &&
+                            decoderBufferInfo.presentationTimeUs < effectiveEndTimeUs
 
                     // Frame dropping
                     var renderThisFrame = isFrameInRange
                     if (isFrameInRange) {
-                        val currentTimestampNs = decoderBufferInfo.presentationTimeUs * 1000
-                        if (lastRenderedTimestampNs != -1L && currentTimestampNs - lastRenderedTimestampNs < frameIntervalNs) {
+                        val currentTimestampNs =
+                            ((decoderBufferInfo.presentationTimeUs - effectiveStartTimeUs) / speed).roundToLong() * 1000
+                        // Sample output-time slots so fractional speed changes do
+                        // not repeatedly round the cadence down to half the rate.
+                        val slot = currentTimestampNs / frameIntervalNs
+                        if (slot <= lastRenderedSlot) {
                             renderThisFrame = false
                         } else {
-                            lastRenderedTimestampNs = currentTimestampNs
+                            lastRenderedSlot = slot
                         }
                     }
 
@@ -329,7 +339,7 @@ class CropAndScale {
                             glProcessor.awaitNewFrame()
                             val adjustedTimestampUs =
                                 decoderBufferInfo.presentationTimeUs - effectiveStartTimeUs
-                            val timestampNs = adjustedTimestampUs * 1000
+                            val timestampNs = (adjustedTimestampUs / speed).roundToLong() * 1000
                             glProcessor.drawFrame(timestampNs)
 
                             currentFrame++

@@ -56,6 +56,19 @@ class AnimatedMediaController extends ValueNotifier<VideoPlayerValue> {
     await _video?.setLooping(loop);
   }
 
+  Future<void> setPlaybackSpeed(double speed) async {
+    if (!speed.isFinite || speed < 1 || speed > 2) {
+      throw ArgumentError.value(speed, 'speed', 'Must be between 1 and 2');
+    }
+    if (_video != null) return _video!.setPlaybackSpeed(speed);
+    if (_disposed) return;
+    value = value.copyWith(playbackSpeed: speed);
+    if (value.isPlaying) {
+      _scheduleFrame();
+      _trackPosition();
+    }
+  }
+
   Future<void> pause() async {
     _timer?.cancel();
     _positionTimer?.cancel();
@@ -83,7 +96,7 @@ class AnimatedMediaController extends ValueNotifier<VideoPlayerValue> {
       ..start();
     _positionTimer = Timer.periodic(const Duration(milliseconds: 20), (_) {
       if (_disposed || !value.isPlaying) return;
-      final position = origin + _playClock.elapsed;
+      final position = origin + _playClock.elapsed * value.playbackSpeed;
       value = value.copyWith(position: position > value.duration ? value.duration : position);
     });
   }
@@ -92,7 +105,7 @@ class AnimatedMediaController extends ValueNotifier<VideoPlayerValue> {
     _timer?.cancel();
     final source = animation!;
     final next = _frame + 1 < source.starts.length ? source.starts[_frame + 1] : source.duration;
-    _timer = Timer(next - value.position, () async {
+    _timer = Timer((next - value.position) * (1 / value.playbackSpeed), () async {
       if (_disposed || !value.isPlaying) return;
       try {
         if (next >= source.duration && !_loop) {

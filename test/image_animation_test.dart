@@ -136,6 +136,89 @@ void main() {
     expect(calls.last, 'cancelImageAnimation');
   });
 
+  test('accelerated GIF export divides variable delays while preserving pixels and alpha', () async {
+    final timestamps = <int>[];
+    final frames = <Uint8List>[];
+    int? duration;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'addImageAnimationFrame') {
+        timestamps.add((call.arguments as Map)['timestampMs']);
+        frames.add((call.arguments as Map)['pixels']);
+      }
+      if (call.method == 'finishImageAnimation') {
+        duration = (call.arguments as Map)['durationMs'];
+        return Uint8List.fromList([1]);
+      }
+      return null;
+    });
+    final source = await ImageAnimation.load(gif);
+    await encodeImageAnimation(source: source);
+    final originals = List<Uint8List>.of(frames);
+    for (final speed in [1.1, 1.5, 2.0]) {
+      frames.clear();
+      timestamps.clear();
+      await encodeImageAnimation(source: source, speed: speed);
+      expect(timestamps, [0, (100 / speed).round(), (400 / speed).round()]);
+      expect(duration, (550 / speed).round());
+      expect(frames, hasLength(originals.length));
+      for (var i = 0; i < frames.length; i++) {
+        expect(frames[i], originals[i]);
+      }
+    }
+    timestamps.clear();
+    await encodeImageAnimation(
+      source: source,
+      speed: 2,
+      start: const Duration(milliseconds: 50),
+      end: const Duration(milliseconds: 450),
+    );
+    expect(timestamps, [0, 25, 175]);
+    expect(duration, 200);
+  });
+
+  test('preview changes speed while playing and retains it across pause and seek', () async {
+    final controller = AnimatedMediaController(gif);
+    final reached = Completer<void>();
+    final clock = Stopwatch();
+    try {
+      await controller.initialize();
+      await controller.seekTo(const Duration(milliseconds: 100));
+      await controller.play();
+      await controller.setPlaybackSpeed(2);
+      clock.start();
+      controller.addListener(() {
+        if (controller.value.position >= const Duration(milliseconds: 200)) {
+          controller.pause();
+          if (!reached.isCompleted) reached.complete();
+        }
+      });
+      await reached.future.timeout(const Duration(seconds: 2));
+      expect(
+        (controller.value.position - const Duration(milliseconds: 100)).inMicroseconds,
+        closeTo(clock.elapsedMicroseconds * 2, 15000),
+      );
+      await controller.seekTo(Duration.zero);
+      expect(controller.value.playbackSpeed, 2);
+      await controller.setPlaybackSpeed(1.1);
+      expect(controller.value.playbackSpeed, 1.1);
+    } finally {
+      controller.dispose();
+    }
+  });
+
+  test('invalid speeds fail before starting the native encoder', () async {
+    final source = await ImageAnimation.load(gif);
+    var called = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (_) async {
+      called = true;
+      return null;
+    });
+    for (final speed in [0.0, .9, 2.1, double.nan, double.infinity]) {
+      await expectLater(encodeImageAnimation(source: source, speed: speed), throwsArgumentError);
+    }
+    expect(called, isFalse);
+  });
+
   test('crop progress reaches completion only after the native container is assembled', () async {
     final progress = <double>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {

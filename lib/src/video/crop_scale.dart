@@ -51,6 +51,7 @@ class CropAndScaleService {
     required Rect crop,
     required bool stretch,
     required int quarterTurns,
+    double speed = 1,
   }) async {
     try {
       await _methodChannel.invokeMethod('startTrim', {
@@ -64,6 +65,7 @@ class CropAndScaleService {
         'cropBottom': crop.bottom.clamp(0.0, 1.0),
         'stretch': stretch,
         'quarterTurns': quarterTurns,
+        'speed': speed,
       });
     } on PlatformException catch (e) {
       print("Failed to start transcoding: '${e.message}'.");

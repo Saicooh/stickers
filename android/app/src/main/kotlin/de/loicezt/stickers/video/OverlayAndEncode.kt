@@ -169,7 +169,7 @@ class OverlayAndEncode {
                 val pixelBufferForReadback =
                     ByteBuffer.allocateDirect(OUTPUT_DIMENSION * OUTPUT_DIMENSION * 4)
 
-                var lastProcessedTimestampUs = -1L
+                var lastProcessedSlot = -1L
                 val frameIntervalUs = 1_000_000L / targetFrameRate
 
                 while (!isDecoderOutputDone && currentCoroutineContext().isActive) {
@@ -199,12 +199,15 @@ class OverlayAndEncode {
                         }
 
                         var processThisFrame = decoderBufferInfo.size > 0
-                        if (processThisFrame) {
+                        if (processThisFrame && originalFrameRate > maxFps) {
                             val currentTimestampUs = decoderBufferInfo.presentationTimeUs
-                            if (lastProcessedTimestampUs != -1L && currentTimestampUs - lastProcessedTimestampUs < frameIntervalUs) {
+                            // Cropped videos already fit the output FPS limit.
+                            // Only resample sources above it, using output-time slots.
+                            val slot = currentTimestampUs / frameIntervalUs
+                            if (slot <= lastProcessedSlot) {
                                 processThisFrame = false // Drop frame
                             } else {
-                                lastProcessedTimestampUs = currentTimestampUs
+                                lastProcessedSlot = slot
                             }
                         }
 

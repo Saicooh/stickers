@@ -140,7 +140,8 @@ class MainActivity : FlutterActivity() {
                             (args["cropRight"] as Number).toFloat(),
                             (args["cropBottom"] as Number).toFloat(),
                             args["stretch"] as Boolean,
-                            args["quarterTurns"] as Int
+                            args["quarterTurns"] as Int,
+                            (args["speed"] as? Number)?.toDouble() ?: 1.0
                         )
                         result.success(null)
                     } catch (e: Exception) {

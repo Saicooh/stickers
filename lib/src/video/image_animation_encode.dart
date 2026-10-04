@@ -18,12 +18,16 @@ Future<Uint8List> encodeImageAnimation({
   ui.Rect crop = const ui.Rect.fromLTRB(0, 0, 1, 1),
   bool stretch = false,
   int quarterTurns = 0,
+  double speed = 1,
   File? overlay,
   WebPConfig config = const WebPConfig(lossless: true, quality: 0, method: 0),
   int? fps,
   void Function(double)? onProgress,
 }) async {
   const channel = MethodChannel('de.loicezt.stickers/methods');
+  if (!speed.isFinite || speed < 1 || speed > 2) {
+    throw ArgumentError.value(speed, 'speed', 'Must be between 1 and 2');
+  }
   var stop = end ?? source.duration;
   if (start < Duration.zero || stop > source.duration || stop <= start) {
     throw ArgumentError('Invalid animation trim range');
@@ -34,6 +38,7 @@ Future<Uint8List> encodeImageAnimation({
   stop = Duration(milliseconds: (stop.inMicroseconds / 1000).round());
   if (stop <= start) throw ArgumentError('Animation trim range must cover at least one millisecond');
   if (fps != null && fps <= 0) throw ArgumentError.value(fps, 'fps', 'Must be positive');
+  final durationMs = math.max(speed == 1 ? 1 : 10, ((stop - start).inMilliseconds / speed).round());
   final decoder = await source.codec();
   ui.Image? overlayImage;
   var started = false;
@@ -57,7 +62,13 @@ Future<Uint8List> encodeImageAnimation({
       final frame = await decoder.getNextFrame();
       try {
         if (frameEnd <= start) continue;
-        final timestamp = math.max(0, (frameStart - start).inMilliseconds);
+        final timestamp = math.max(0, ((frameStart - start).inMilliseconds / speed).round());
+        if (timestamp <= lastTimestamp) continue;
+        // Very short WebP delays may be clamped by players. Merge accelerated
+        // frames rather than creating delays shorter than 10 ms.
+        if (speed > 1 && (timestamp > durationMs - 10 || (lastTimestamp >= 0 && timestamp - lastTimestamp < 10))) {
+          continue;
+        }
         if (lastTimestamp >= 0 && fps != null && timestamp - lastTimestamp < 1000 / fps) continue;
         final pixels = await renderAnimationFrame(
           frame.image,
@@ -76,7 +87,7 @@ Future<Uint8List> encodeImageAnimation({
     }
     final data = await channel.invokeMethod<Uint8List>(
       'finishImageAnimation',
-      {'durationMs': (stop - start).inMilliseconds},
+      {'durationMs': durationMs},
     );
     if (data == null || data.isEmpty) throw StateError('Could not encode image animation');
     started = false;
