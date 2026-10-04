@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:stickers/generated/intl/app_localizations.dart';
-import 'package:stickers/src/checker_painter.dart';
 import 'package:stickers/src/data/load_store.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/dialogs/delete_confirm_dialog.dart';
@@ -16,6 +15,7 @@ import 'package:stickers/src/pages/crop_page.dart';
 import 'package:stickers/src/pages/default_page.dart';
 import 'package:stickers/src/util.dart';
 import 'package:stickers/src/video/animated_media_picker.dart';
+import 'package:stickers/src/widgets/sticker_thumbnail.dart';
 
 class StickerPackPage extends StatefulWidget {
   final StickerPack pack;
@@ -118,19 +118,16 @@ class StickerPackPageState extends State<StickerPackPage> {
                         clipBehavior: Clip.antiAlias,
                         child: index >= widget.pack.stickers.length
                             ? null
-                            : CustomPaint(
-                                painter: CheckerPainter(context),
-                                child: GestureDetector(
-                                  child: Image.file(File(widget.pack.stickers[index].source)),
-                                  onTap: () {
-                                    showDialog(
-                                      context: context,
-                                      builder: ((context) => EditStickerDialog(widget.pack, index)),
-                                    ).then(
-                                      (_) => setState(() {}),
-                                    );
-                                  },
-                                ),
+                            : GestureDetector(
+                                child: StickerThumbnail(widget.pack.stickers[index].source),
+                                onTap: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: ((context) => EditStickerDialog(widget.pack, index)),
+                                  ).then(
+                                    (_) => setState(() {}),
+                                  );
+                                },
                               ),
                       );
                     }),

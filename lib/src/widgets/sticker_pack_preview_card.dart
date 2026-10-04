@@ -10,6 +10,7 @@ import 'package:stickers/src/dialogs/delete_confirm_dialog.dart';
 import 'package:stickers/src/dialogs/edit_pack_dialog.dart';
 import 'package:stickers/src/globals.dart';
 import 'package:stickers/src/pages/sticker_pack_page.dart';
+import 'package:stickers/src/widgets/sticker_thumbnail.dart';
 
 class StickerPackPreviewCard extends StatefulWidget {
   final StickerPack pack;
@@ -99,7 +100,6 @@ class _StickerPackPreviewCardState extends State<StickerPackPreviewCard> {
               height: 100,
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
               child: ListView.builder(
-                shrinkWrap: true,
                 scrollDirection: Axis.horizontal,
                 itemBuilder: (context, index) {
                   var sticker = widget.pack.stickers[index];
@@ -116,12 +116,7 @@ class _StickerPackPreviewCardState extends State<StickerPackPreviewCard> {
                         )
                       ]),
                       clipBehavior: Clip.antiAlias,
-                      child: CustomPaint(
-                        painter: CheckerPainter(context),
-                        child: Image.file(
-                          File(sticker.source),
-                        ),
-                      ),
+                      child: StickerThumbnail(sticker.source),
                     ),
                   );
                 },
