@@ -34,6 +34,12 @@ class MainActivity : FlutterActivity() {
     private val scope = CoroutineScope(
         Dispatchers.Main + SupervisorJob()
     )
+    private val gifPicker by lazy { GifPicker(this, scope) }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        gifPicker.onActivityResult(requestCode, resultCode, data)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         handleViewIntent(intent)
@@ -84,6 +90,8 @@ class MainActivity : FlutterActivity() {
             METHOD_CHANNEL_NAME
         ).setMethodCallHandler { call, result ->
             when (call.method) {
+                "pickGif" -> gifPicker.pick(result)
+
                 "beginImageAnimation", "addImageAnimationFrame", "finishImageAnimation", "cancelImageAnimation" -> {
                     scope.launch {
                         try {

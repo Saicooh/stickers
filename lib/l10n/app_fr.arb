@@ -118,6 +118,8 @@
   "downloading": "Téléchargement...",
   "download": "Télécharger",
   "couldntLoadMedia": "Impossible de charger le média",
+  "videoSource": "Vidéo",
+  "chooseVideoOrAnimatedGif": "Choisissez une vidéo ou un GIF animé pour ce pack.",
   "couldntLoadVideo": "Impossible de charger la vidéo",
     "trimVideo": "Couper la vidéo",
     "cropFit": "Ajuster",

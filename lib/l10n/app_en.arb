@@ -121,6 +121,8 @@
   "downloading": "Downloading...",
   "download": "Download",
   "couldntLoadMedia": "Couldn't load media",
+  "videoSource": "Video",
+  "chooseVideoOrAnimatedGif": "Choose a video or an animated GIF for this pack.",
   "couldntLoadVideo": "Couldn't load video",
   "trimVideo": "Trim video",
   "cropFit": "Fit",

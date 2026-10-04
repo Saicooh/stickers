@@ -118,6 +118,8 @@
     "downloading": "Herunterladen...",
     "download": "Herunterladen",
     "couldntLoadMedia": "Medium konnte nicht geladen werden",
+    "videoSource": "Video",
+    "chooseVideoOrAnimatedGif": "Wähle ein Video oder ein animiertes GIF für dieses Paket.",
     "couldntLoadVideo":  "Video konnte nicht geladen werden",
     "trimVideo": "Video zuschneiden",
     "cropFit": "Einpassen",

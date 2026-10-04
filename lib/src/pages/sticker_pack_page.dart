@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:stickers/generated/intl/app_localizations.dart';
 import 'package:stickers/src/checker_painter.dart';
@@ -14,6 +15,7 @@ import 'package:stickers/src/globals.dart';
 import 'package:stickers/src/pages/crop_page.dart';
 import 'package:stickers/src/pages/default_page.dart';
 import 'package:stickers/src/util.dart';
+import 'package:stickers/src/video/animated_media_picker.dart';
 
 class StickerPackPage extends StatefulWidget {
   final StickerPack pack;
@@ -194,9 +196,28 @@ class StickerPackPageState extends State<StickerPackPage> {
     try {
       final ImagePicker picker = ImagePicker();
       if (widget.pack.animated) {
-        // Keep GIF bytes intact: resizing or compressing an image would flatten its animation.
-        final XFile? media = await picker.pickMedia();
-        final path = media?.path;
+        final source = await showModalBottomSheet<AnimatedMediaSource>(
+          context: context,
+          builder: (context) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.videocam_outlined),
+                  title: Text(AppLocalizations.of(context)!.videoSource),
+                  onTap: () => Navigator.pop(context, AnimatedMediaSource.video),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.gif_box_outlined),
+                  title: const Text('GIF'),
+                  onTap: () => Navigator.pop(context, AnimatedMediaSource.gif),
+                ),
+              ],
+            ),
+          ),
+        );
+        if (source == null || !mounted) return;
+        final path = await AnimatedMediaPicker().pick(source);
         if (path == null) return;
         if (!mounted) return;
         Navigator.pushNamed(
@@ -231,7 +252,9 @@ class StickerPackPageState extends State<StickerPackPage> {
             builder: (context) {
               return ErrorDialog(
                 title: AppLocalizations.of(context)!.couldntLoadMedia,
-                message: e.toString(),
+                message: e is PlatformException && e.code == 'INVALID_GIF'
+                    ? AppLocalizations.of(context)!.chooseVideoOrAnimatedGif
+                    : e.toString(),
               );
             });
       }

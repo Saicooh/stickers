@@ -20,7 +20,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final imagePicker = ImagePickerPlatform.instance;
   if (imagePicker is ImagePickerAndroid) {
-    // Use the same gallery UI for photos and mixed image/video selection.
+    // Use the Android gallery UI for both photo and video selection.
     imagePicker.useAndroidPhotoPicker = true;
   }
   PackageInfo.fromPlatform().then((result) => info = result);

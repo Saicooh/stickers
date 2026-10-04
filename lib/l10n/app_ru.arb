@@ -121,6 +121,8 @@
   "downloading": "Загрузка...",
   "download": "Загрузить",
   "couldntLoadMedia": "Ошибка загрузки медиа",
+  "videoSource": "Видео",
+  "chooseVideoOrAnimatedGif": "Выберите видео или анимированный GIF для этого набора.",
   "couldntLoadVideo": "Ошибка загрузки видео",
   "trimVideo": "Обрезать видео",
   "cropFit": "Вписать",

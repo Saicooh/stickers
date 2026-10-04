@@ -121,6 +121,8 @@
   "downloading": "Baixando...",
   "download": "Baixar",
   "couldntLoadMedia": "Não foi possível carregar a mídia",
+  "videoSource": "Vídeo",
+  "chooseVideoOrAnimatedGif": "Escolha um vídeo ou um GIF animado para este pacote.",
   "couldntLoadVideo": "Não foi possível carregar o vídeo",
   "trimVideo": "Cortar vídeo",
   "cropFit": "Ajustar",
