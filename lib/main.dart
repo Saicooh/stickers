@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker_android/image_picker_android.dart';
+import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:stickers/src/data/load_store.dart';
@@ -16,6 +18,11 @@ import 'src/settings/settings_service.dart';
 void main() async {
   Stopwatch sw = Stopwatch()..start();
   WidgetsFlutterBinding.ensureInitialized();
+  final imagePicker = ImagePickerPlatform.instance;
+  if (imagePicker is ImagePickerAndroid) {
+    // Use the same gallery UI for photos and mixed image/video selection.
+    imagePicker.useAndroidPhotoPicker = true;
+  }
   PackageInfo.fromPlatform().then((result) => info = result);
   await createDirs();
 

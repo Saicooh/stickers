@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:stickers/generated/intl/app_localizations.dart';
@@ -195,10 +194,8 @@ class StickerPackPageState extends State<StickerPackPage> {
     try {
       final ImagePicker picker = ImagePicker();
       if (widget.pack.animated) {
-        final media = await FilePicker.pickFile(
-          type: FileType.custom,
-          allowedExtensions: ['gif', 'mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi', '3gp', 'mpeg', 'mpg'],
-        );
+        // Keep GIF bytes intact: resizing or compressing an image would flatten its animation.
+        final XFile? media = await picker.pickMedia();
         final path = media?.path;
         if (path == null) return;
         if (!mounted) return;
