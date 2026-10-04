@@ -8,16 +8,22 @@ import 'package:image_editor/image_editor.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:stickers/src/data/sticker.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
+import 'package:stickers/src/data/pack_store.dart';
 import 'package:stickers/src/globals.dart';
 import 'package:stickers/src/util.dart';
 import 'package:stickers/src/widgets/image_layer.dart';
 
 import 'editor_data.dart';
 
-Future<void> savePacks(List<StickerPack> packs) async {
-  File output = File("$packsDir/packs.json");
-  await output.writeAsString(jsonEncode(packs.map((pack) => pack.toJson()).toList()));
+PackStore? _store;
+
+PackStore get _packStore {
+  final path = "$packsDir/packs.json";
+  if (_store?.file.path != path) _store = PackStore(File(path));
+  return _store!;
 }
+
+Future<void> savePacks(List<StickerPack> packs) => _packStore.save(packs);
 
 Future<void> exportPack(StickerPack pack) async {
   Stopwatch sw = Stopwatch()..start();
@@ -142,22 +148,12 @@ Future<void> importPack(File f) async {
     packs.add(pack);
   }
 
-  // Clean up - even if the same files are imported again, they are copied again so there's no point in caching them
-  // There is no await here since we don't need to wait
-  // until the deletion of the temporary folder is complete to move on
-  unzipDir.delete(recursive: true);
-  f.parent.delete(recursive: true);
-
-  savePacks(packs);
+  await savePacks(packs);
+  // Only remove the directory created by this import, never the archive's parent folder.
+  await unzipDir.delete(recursive: true);
 }
 
-Future<List<StickerPack>> getPacks() async {
-  File input = File("$packsDir/packs.json");
-  if (await input.exists()) {
-    return (jsonDecode(await input.readAsString()) as List).map((json) => StickerPack.fromJson(json)).toList();
-  }
-  return List.empty(growable: true);
-}
+Future<List<StickerPack>> getPacks() => _packStore.load();
 
 Future<Uint8List> cropSticker(
   Rect cropRect,
@@ -265,9 +261,8 @@ Future<void> addToPack(
     }
   }
 
-  pack.onEdit();
   await FileImage(stickerFile).evict();
-  await savePacks(packs);
+  await pack.onEdit();
   // Clear media cache after adding a sticker
   print("Clearing media cache");
   Directory(mediaCacheDir).list().listen((entry) => entry.delete());

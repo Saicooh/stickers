@@ -54,9 +54,9 @@ class StickerPack {
     await stickerPack.sendToWhatsApp();
   }
 
-  void onEdit() {
-    savePacks(packs);
+  Future<void> onEdit() {
     imageDataVersion = (int.parse(imageDataVersion) + 1).toString();
+    return savePacks(packs);
   }
 
   Map<String, Object?> toJson() {

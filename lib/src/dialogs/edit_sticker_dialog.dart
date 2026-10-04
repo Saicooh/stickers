@@ -123,11 +123,11 @@ class _EditStickerDialogState extends State<EditStickerDialog> {
                         ),
                         FilledButton(
                           onPressed: valid
-                              ? () {
+                              ? () async {
                                   if (formKey.currentState?.validate() == false) return;
                                   widget.pack.stickers[widget.index].emojis = controller.value.text.characters.toList();
-                                  widget.pack.onEdit();
-                                  Navigator.of(context).pop();
+                                  await widget.pack.onEdit();
+                                  if (context.mounted) Navigator.of(context).pop();
                                 }
                               : null,
                           child: Text(AppLocalizations.of(context)!.done),
@@ -153,7 +153,7 @@ class _EditStickerDialogState extends State<EditStickerDialog> {
       ).delete(recursive: true);
     }
     widget.pack.stickers.removeAt(widget.index);
-    widget.pack.onEdit();
+    await widget.pack.onEdit();
   }
 
   String? validator(String? value) {

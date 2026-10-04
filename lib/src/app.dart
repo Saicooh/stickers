@@ -242,14 +242,13 @@ class StickersAppState extends State<StickersApp> {
         false, // TODO add support for animated stickers in auto-generated
       );
       packs.add(pack);
-      savePacks(packs);
       return pack;
     });
     final index = pack.stickers.length;
     final img = await decodeImageFromList(rawImageData);
     final cropRect = Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble());
     final cropped = await cropSticker(cropRect, rawImageData, pack, index, 0);
-    addToPack(pack, index, cropped);
+    await addToPack(pack, index, cropped);
 
     navigatorKey.currentState!.pushNamed("/pack", arguments: pack).then((value) {
       if (homeState != null) {

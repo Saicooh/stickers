@@ -156,15 +156,15 @@ class _EditPackDialogState extends State<EditPackDialog> {
             },
             child: Text(AppLocalizations.of(context)!.cancel)),
         ElevatedButton(
-          onPressed: () {
+          onPressed: () async {
             if (!_formKey.currentState!.validate()) return;
             widget.pack.author = _authorController.text;
             widget.pack.title = _nameController.text;
             widget.pack.publisherWebsite = _publisherURLController.text;
             widget.pack.privacyPolicyWebsite = _privacyPolicyURLController.text;
             widget.pack.licenseAgreementWebsite = _licenseAgreementURLController.text;
-            widget.pack.onEdit();
-            Navigator.of(context).pop();
+            await widget.pack.onEdit();
+            if (context.mounted) Navigator.of(context).pop();
           },
           child: Text(AppLocalizations.of(context)!.done),
         ),
