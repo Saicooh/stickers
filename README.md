@@ -12,6 +12,7 @@ This fork of [lolocomotive/stickers](https://github.com/lolocomotive/stickers) i
 - Upload the static video overlay once per export; see [validation and timing](docs/video-overlay-performance.md).
 - Serialize pack saves, replace the manifest through a flushed temporary file and recover damaged metadata from a backup; see [storage behavior](docs/pack-storage.md).
 - Defer Google Fonts previews while scrolling and register native export fonts only when used; see [font loading](docs/font-loading.md).
+- Repaint drawing layers without rebuilding the editor on every pointer move; see [drawing behavior](docs/editor-drawing.md).
 - Pick photos through the Android gallery; animated packs offer separate video and GIF filters that exclude still photos.
 - A thumbnail timeline with draggable trim handles, a playback position marker, and start, end and clip-length timestamps.
 - Drag the selected clip sideways to move it without changing its duration; tap inside it to preview a position.

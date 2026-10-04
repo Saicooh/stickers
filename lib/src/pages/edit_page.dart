@@ -331,7 +331,7 @@ class _EditPageState extends State<EditPage> {
                                     bottom: 0,
                                     left: 0,
                                     right: 0,
-                                    child: e,
+                                    child: e is DrawLayer ? e : RepaintBoundary(child: e),
                                   ),
                                 ),
                                 if (_message != null)
@@ -399,6 +399,7 @@ class _EditPageState extends State<EditPage> {
                               final layer =
                                   _layers.whereType<DrawLayer>().lastWhere((layer) => layer.painter.strokes.isNotEmpty);
                               _undo.add(UndoEntry(layer.painter.strokes.removeLast(), layer.painter));
+                              layer.painter.changed();
                               setState(() {});
                             },
                       label: Text(AppLocalizations.of(context)!.undo),
@@ -416,6 +417,7 @@ class _EditPageState extends State<EditPage> {
                               setState(() {
                                 final entry = _undo.removeLast();
                                 entry.painter.strokes.add(entry.stroke);
+                                entry.painter.changed();
                               });
                             },
                       label: Text(AppLocalizations.of(context)!.redo),
@@ -750,7 +752,7 @@ class _EditPageState extends State<EditPage> {
     if (_drawing) {
       _brushPos = Offset(_brushPos.dx + translationDeltaMatrix.row0.w, _brushPos.dy + translationDeltaMatrix.row1.w);
       (_layers.last as DrawLayer).painter.strokes.last.points.add(_brushPos / scaleFactor);
-      setState(() {});
+      (_layers.last as DrawLayer).painter.changed();
       return;
     }
 
@@ -773,7 +775,8 @@ class _EditPageState extends State<EditPage> {
       }
       final painter = (_layers.last as DrawLayer).painter;
 
-      painter.strokes.add(Stroke(_brushColor, _brushSize));
+      painter.strokes.add(Stroke(_brushColor, _brushSize)..points.add(_brushPos / scaleFactor));
+      painter.changed();
       setState(() {});
       return;
     }
