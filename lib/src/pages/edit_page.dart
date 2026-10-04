@@ -26,6 +26,7 @@ import 'package:stickers/src/video/common.dart';
 import 'package:stickers/src/video/image_animation_encode.dart';
 import 'package:stickers/src/video/overlay_encode.dart';
 import 'package:stickers/src/widgets/draw_layer.dart';
+import 'package:stickers/src/widgets/image_layer.dart';
 import 'package:stickers/src/widgets/text_layer.dart';
 import 'package:vector_math/vector_math_64.dart' hide Colors;
 
@@ -560,6 +561,10 @@ class _EditPageState extends State<EditPage> {
     });
     try {
       await FontsRegistry.prepareForExport(_texts.map((text) => text.fontName));
+      final imageOptions = <ImageLayer, MixImageOption>{};
+      for (final layer in _layers.whereType<ImageLayer>()) {
+        imageOptions[layer] = await layer.exportOption();
+      }
       if (!context.mounted) return;
       restoreTextScale = true;
       final option = ImageEditorOption();
@@ -576,6 +581,8 @@ class _EditPageState extends State<EditPage> {
           (layerOption as AddTextOption).addText(layer.text);
         } else if (layer is DrawLayer) {
           layerOption = layer.drawOption;
+        } else if (layer is ImageLayer) {
+          layerOption = imageOptions[layer]!;
         } else {
           throw UnimplementedError();
         }
@@ -588,6 +595,7 @@ class _EditPageState extends State<EditPage> {
       if (widget.mediaType == MediaType.picture) {
         data = (await ImageEditor.editFileImage(file: _source, imageEditorOption: option))!;
       } else {
+        if (!context.mounted) return;
         if (!_controller.value.isInitialized) throw Exception(AppLocalizations.of(context)!.couldntLoadMedia);
         data = await exportAnimatedSticker(option, context);
       }
@@ -839,8 +847,9 @@ abstract class EditorLayer extends Widget {
       case "text":
         return TextLayer.fromJson(json, rbKey);
       case "image":
-        throw Exception("Not supported yet");
+        return ImageLayer.fromJson(json);
       default:
+        if (json['source'] is String) return ImageLayer.fromJson(json);
         throw Exception("Unsupported layer type");
     }
   }
