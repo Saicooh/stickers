@@ -141,5 +141,6 @@
     "trimFailedMsg": "Versuchen Sie es mit einem anderen Video. Wenn es immer noch nicht funktioniert, gehen Sie zu GitHub, um ein Problem zu melden",
     "fontsManagerDetails": "Schriftarten zur App hinzufügen oder entfernen",
     "clearCache": "Cache leeren",
-    "thisWillRestart": "Die App wird dabei neu gestartet"
+    "thisWillRestart": "Die App wird dabei neu gestartet",
+  "backupPacks": "Alle Stickerpakete sichern"
 }

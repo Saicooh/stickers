@@ -141,5 +141,6 @@
   "trimFailedMsg": "Essayez une autre vidéo, et si cela ne fonctionne toujours pas, rendez-vous sur GitHub pour signaler un problème",
   "fontsManagerDetails": "Ajouter/supprimer des polices de l'application",
   "clearCache": "Vider le cache",
-  "thisWillRestart": "Ceci redémarrera l'application"
+  "thisWillRestart": "Ceci redémarrera l'application",
+  "backupPacks": "Sauvegarder tous les packs"
 }

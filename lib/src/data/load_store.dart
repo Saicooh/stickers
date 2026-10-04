@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:stickers/src/data/sticker.dart';
 import 'package:stickers/src/data/sticker_pack.dart';
 import 'package:stickers/src/data/pack_store.dart';
+import 'package:stickers/src/data/portable_pack.dart';
 import 'package:stickers/src/globals.dart';
 import 'package:stickers/src/util.dart';
 import 'package:stickers/src/widgets/image_layer.dart';
@@ -26,131 +27,129 @@ PackStore get _packStore {
 Future<void> savePacks(List<StickerPack> packs) => _packStore.save(packs);
 
 Future<void> exportPack(StickerPack pack) async {
-  Stopwatch sw = Stopwatch()..start();
+  final archive = await createPackArchive([pack], singlePack: true);
+  await SharePlus.instance.share(ShareParams(files: [XFile(archive.path)]));
+}
+
+Future<File> createPackArchive(List<StickerPack> packs, {bool singlePack = false}) async {
+  if (packs.isEmpty) throw StateError('No packs to export');
+  final snapshot = packs.map((pack) => StickerPack.fromJson(jsonDecode(jsonEncode(pack.toJson())))).toList();
   Directory exportDir = Directory(exportCacheDir);
-  Directory packDir = Directory("${exportDir.path}/${uid()}/");
-  await packDir.create(recursive: true);
-  File jsonFile = File("${packDir.path}/pack.json");
-  Map<String, dynamic> exportData = pack.toJson();
-  //TODO Don't hardcode extensions
-  for (var i = 0; i < pack.stickers.length; i++) {
-    await File(pack.stickers[i].source).copy("${packDir.path}$i.webp");
-    exportData["stickers"][i]["source"] = "$i.webp";
-    if (exportData["stickers"][i]["editorData"] != null) {
-      exportData["stickers"][i]["editorData"] = "$i.json";
-      final data = jsonDecode(await File(pack.stickers[i].editorData!).readAsString());
-      data["background"] = "$i/background.webp";
-      await File("${packDir.path}$i.json").writeAsString(jsonEncode(data));
-      await Directory(pack.stickers[i].editorData!.replaceAll(RegExp(".json\$"), "")).copy("${packDir.path}$i");
+  await exportDir.create(recursive: true);
+  final packDir = await exportDir.createTemp('backup_');
+  final title = singlePack ? snapshot.single.title.replaceAll(RegExp(r'[^\w !&-]'), '_') : 'Sticker-backup';
+  final zipFile = File('${exportDir.path}/${title}_${uid()}.zip');
+  try {
+    if (singlePack) {
+      final data = await copyPackAssets(snapshot.single, packDir);
+      await File('${packDir.path}/pack.json').writeAsString(jsonEncode(data), flush: true);
+    } else {
+      await writePackBackup(snapshot, packDir);
     }
+    await ZipFile.createFromDirectory(sourceDir: packDir, zipFile: zipFile);
+    return zipFile;
+  } catch (_) {
+    if (await zipFile.exists()) await zipFile.delete();
+    rethrow;
+  } finally {
+    await packDir.delete(recursive: true);
   }
-  if (pack.trayIcon != null) {
-    await File(pack.trayIcon!).copy("${packDir.path}tray.png");
-    exportData["trayIcon"] = "tray.png";
-  }
-  debugPrint("Copy t=${sw.elapsedMilliseconds}ms");
-  await jsonFile.writeAsString(jsonEncode(exportData));
-  debugPrint("Json written  t=${sw.elapsedMilliseconds}ms");
-
-  File zipFile = File("${exportDir.path}/${pack.title.replaceAll(RegExp("[^ \\-_!&a-zA-Z0-9]"), "_")}.zip");
-  await ZipFile.createFromDirectory(sourceDir: packDir, zipFile: zipFile);
-
-  debugPrint("Exported to: ${zipFile.path} t=${sw.elapsedMilliseconds}ms");
-  SharePlus.instance.share(ShareParams(files: [XFile(zipFile.path)]));
 }
 
 Future<void> importPack(File f) async {
   //TODO show progress
   Stopwatch sw = Stopwatch()..start();
   Directory importDir = Directory(mediaCacheDir);
-  Directory unzipDir = Directory("${importDir.path}${uid()}/");
-  await unzipDir.create(recursive: true);
-  await ZipFile.extractToDirectory(zipFile: f, destinationDir: unzipDir);
-  debugPrint("Unzip t=${sw.elapsedMilliseconds}ms");
+  await importDir.create(recursive: true);
+  Directory unzipDir = await importDir.createTemp('import_');
+  try {
+    await ZipFile.extractToDirectory(zipFile: f, destinationDir: unzipDir);
+    debugPrint("Unzip t=${sw.elapsedMilliseconds}ms");
 
-  List<StickerPack> packsToAdd = [];
+    List<StickerPack> packsToAdd = [];
 
-  switch (f.path.split(".").last.toLowerCase()) {
-    case "wastickers":
-      final dirContents = unzipDir.listSync();
-      final pack = StickerPack(
-        (await File("${unzipDir.path}title.txt").readAsString()).replaceAll("\n", ""),
-        (await File("${unzipDir.path}author.txt").readAsString()).replaceAll("\n", ""),
-        uid(),
-        dirContents
-            .map((entry) => entry.path)
-            .where((path) => path.toLowerCase().endsWith(".webp"))
-            .map((path) => Sticker(path, ["❤"], null))
-            .toList(),
-        "1000",
-        false, // It's not possible to directly export animated packs from that app.
-        trayIcon: dirContents.where((entry) => entry.path.toLowerCase().endsWith(".png")).firstOrNull?.path,
-      );
-      packsToAdd.add(pack);
-      break;
-    case "stickify":
-      final dirs = unzipDir.listSync().whereType<Directory>();
-      for (final dir in dirs) {
-        final json = jsonDecode(File("${dir.path}/contents.json").readAsStringSync());
-        for (final packJson in json["sticker_packs"]) {
-          final pack = StickerPack(
-            packJson["name"],
-            packJson["publisher"],
-            packJson["identifier"],
-            (packJson["stickers"] as List)
-                .map(
-                  (sticker) => Sticker(
-                    "${dir.path}/${sticker["image_file"]}",
-                    (sticker["emojis"] as List).isEmpty ? ["❤"] : sticker["emojis"],
-                    null,
-                  ),
-                )
-                .toList(),
-            packJson["image_data_version"],
-            packJson["animated_sticker_pack"],
-            publisherWebsite: packJson["publisher_website"],
-            licenseAgreementWebsite: packJson["license_agreement_website"],
-            privacyPolicyWebsite: packJson["privacy_policy_website"],
-          );
-          packsToAdd.add(pack);
+    switch (f.path.split(".").last.toLowerCase()) {
+      case "wastickers":
+        final dirContents = unzipDir.listSync();
+        final pack = StickerPack(
+          (await File("${unzipDir.path}/title.txt").readAsString()).replaceAll("\n", ""),
+          (await File("${unzipDir.path}/author.txt").readAsString()).replaceAll("\n", ""),
+          uid(),
+          dirContents
+              .map((entry) => entry.path)
+              .where((path) => path.toLowerCase().endsWith(".webp"))
+              .map((path) => Sticker(path, ["❤"], null))
+              .toList(),
+          "1000",
+          false, // It's not possible to directly export animated packs from that app.
+          trayIcon: dirContents.where((entry) => entry.path.toLowerCase().endsWith(".png")).firstOrNull?.path,
+        );
+        packsToAdd.add(pack);
+        break;
+      case "stickify":
+        final dirs = unzipDir.listSync().whereType<Directory>();
+        for (final dir in dirs) {
+          final json = jsonDecode(File("${dir.path}/contents.json").readAsStringSync());
+          for (final packJson in json["sticker_packs"]) {
+            final pack = StickerPack(
+              packJson["name"],
+              packJson["publisher"],
+              packJson["identifier"],
+              (packJson["stickers"] as List)
+                  .map(
+                    (sticker) => Sticker(
+                      "${dir.path}/${sticker["image_file"]}",
+                      (sticker["emojis"] as List).isEmpty ? ["❤"] : sticker["emojis"],
+                      null,
+                    ),
+                  )
+                  .toList(),
+              packJson["image_data_version"],
+              packJson["animated_sticker_pack"],
+              publisherWebsite: packJson["publisher_website"],
+              licenseAgreementWebsite: packJson["license_agreement_website"],
+              privacyPolicyWebsite: packJson["privacy_policy_website"],
+            );
+            packsToAdd.add(pack);
+          }
         }
+        break;
+      default:
+        packsToAdd.addAll(await readPackBackup(unzipDir));
+    }
+    debugPrint("Parse t=${sw.elapsedMilliseconds}ms");
+
+    final created = <Directory>[];
+    final installed = <StickerPack>[];
+    try {
+      for (final pack in packsToAdd) {
+        if (pack.id.isEmpty || pack.id == '.' || pack.id == '..' || pack.id.contains(RegExp(r'[/\\:]'))) {
+          throw const FormatException('Invalid pack identifier');
+        }
+        while (packs.any((p) => p.id == pack.id) ||
+            installed.any((p) => p.id == pack.id) ||
+            await Directory('$packsDir/${pack.id}').exists()) {
+          pack.id = "${pack.id}_";
+        }
+        final directory = await Directory('$packsDir/${pack.id}').create(recursive: true);
+        created.add(directory);
+        final data = await copyPackAssets(pack, directory, relativePaths: false);
+        debugPrint("[${pack.id}] Copy t=${sw.elapsedMilliseconds}ms");
+        installed.add(StickerPack.fromJson(data));
       }
-      break;
-    default:
-      //TODO support stickify's backup file format
-      File jsonFile = File("${unzipDir.path}pack.json");
-      final pack = StickerPack.fromJson(jsonDecode(await jsonFile.readAsString()));
-      for (var sticker in pack.stickers) {
-        sticker.source = unzipDir.path + sticker.source;
+      packs.addAll(installed);
+      await savePacks(packs);
+    } catch (_) {
+      packs.removeWhere(installed.contains);
+      for (final directory in created) {
+        await directory.delete(recursive: true);
       }
-      if (pack.trayIcon != null) {
-        pack.trayIcon = unzipDir.path + pack.trayIcon!;
-      }
-      packsToAdd.add(pack);
+      rethrow;
+    }
+  } finally {
+    // Only remove the directory created by this import, never the archive's parent folder.
+    await unzipDir.delete(recursive: true);
   }
-  debugPrint("Parse t=${sw.elapsedMilliseconds}ms");
-
-  for (final pack in packsToAdd) {
-    while (packs.where((p) => p.id == pack.id).isNotEmpty) {
-      pack.id = "${pack.id}_";
-    }
-    await Directory("$packsDir/${pack.id}").create(recursive: true);
-
-    for (var i = 0; i < pack.stickers.length; i++) {
-      await File(pack.stickers[i].source).copy("$packsDir/${pack.id}/$i.webp");
-      pack.stickers[i].source = File("$packsDir/${pack.id}/$i.webp").path;
-    }
-    if (pack.trayIcon != null) {
-      await File("${pack.trayIcon}").copy("$packsDir/${pack.id}/tray.webp");
-      pack.trayIcon = File("$packsDir/${pack.id}/tray.webp").path;
-    }
-    debugPrint("[${pack.id}] Copy t=${sw.elapsedMilliseconds}ms");
-    packs.add(pack);
-  }
-
-  await savePacks(packs);
-  // Only remove the directory created by this import, never the archive's parent folder.
-  await unzipDir.delete(recursive: true);
 }
 
 Future<List<StickerPack>> getPacks() => _packStore.load();

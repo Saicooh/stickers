@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:stickers/generated/intl/app_localizations.dart';
 import 'package:stickers/src/data/load_store.dart';
@@ -20,6 +21,22 @@ class StickerPacksPage extends StatefulWidget {
 }
 
 class StickerPacksPageState extends State<StickerPacksPage> {
+  bool _backingUp = false;
+
+  Future<void> _backupAll() async {
+    setState(() => _backingUp = true);
+    try {
+      final archive = await createPackArchive(packs);
+      await SharePlus.instance.share(ShareParams(files: [XFile(archive.path)]));
+    } catch (error) {
+      if (!mounted) return;
+      await showDialog<void>(context: context, builder: (_) => ErrorDialog(
+        title: AppLocalizations.of(context)!.error, message: error.toString(),
+      ));
+    } finally {
+      if (mounted) setState(() => _backingUp = false);
+    }
+  }
   @override
   initState() {
     super.initState();
@@ -35,6 +52,12 @@ class StickerPacksPageState extends State<StickerPacksPage> {
   Widget build(BuildContext context) {
     return DefaultSliverActivity(
       actions: [
+        IconButton(
+          tooltip: AppLocalizations.of(context)!.backupPacks,
+          onPressed: packs.isEmpty || _backingUp ? null : _backupAll,
+          icon: _backingUp ? const SizedBox.square(dimension: 24, child: CircularProgressIndicator())
+              : const Icon(Icons.save_alt),
+        ),
         IconButton(
           tooltip: AppLocalizations.of(context)!.settings,
           onPressed: () {

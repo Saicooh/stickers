@@ -159,5 +159,6 @@
   "trimFailedMsg": "Try another video, and if it still doesn't work, head to GitHub to submit an Issue",
   "fontsManagerDetails": "Add/remove fonts of the app",
   "clearCache": "Clear cache",
-  "thisWillRestart": "This will restart the app"
+  "thisWillRestart": "This will restart the app",
+  "backupPacks": "Back up all packs"
 }

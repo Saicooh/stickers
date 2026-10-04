@@ -4,7 +4,7 @@ Simple android sticker maker for WhatsApp without ads.
 
 ## Changes in this fork
 
-This fork of [lolocomotive/stickers](https://github.com/lolocomotive/stickers) improves the video editor for animated stickers:
+This fork of [lolocomotive/stickers](https://github.com/lolocomotive/stickers) improves sticker editing, imports and backups:
 
 - Import GIFs into animated packs, with trimming, cropping, rotation, text and drawing; preserve frame timing and transparency.
 - Faster lossless GIF conversion after cropping; see [performance measurements](docs/gif-performance.md).
@@ -13,6 +13,7 @@ This fork of [lolocomotive/stickers](https://github.com/lolocomotive/stickers) i
 - Serialize pack saves, replace the manifest through a flushed temporary file and recover damaged metadata from a backup; see [storage behavior](docs/pack-storage.md).
 - Defer Google Fonts previews while scrolling and register native export fonts only when used; see [font loading](docs/font-loading.md).
 - Repaint drawing layers without rebuilding the editor on every pointer move; see [drawing behavior](docs/editor-drawing.md).
+- Back up all packs in one ZIP, including original media and editable layers; restore them as additional packs through the import button. Custom fonts and settings are separate; see [pack backups](docs/pack-backups.md).
 - Pick photos through the Android gallery; animated packs offer separate video and GIF filters that exclude still photos.
 - A thumbnail timeline with draggable trim handles, a playback position marker, and start, end and clip-length timestamps.
 - Drag the selected clip sideways to move it without changing its duration; tap inside it to preview a position.
