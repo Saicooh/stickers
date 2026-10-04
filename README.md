@@ -2,6 +2,21 @@
 
 Simple android sticker maker for WhatsApp without ads.
 
+## Changes in this fork
+
+This fork of [lolocomotive/stickers](https://github.com/lolocomotive/stickers) improves the video editor for animated stickers:
+
+- A thumbnail timeline with draggable trim handles, a playback position marker, and start, end and clip-length timestamps.
+- Frame-by-frame adjustments for the start and end of the selected clip.
+- Looping playback of the selected segment while editing.
+- A movable, resizable video crop with freeform selection and 16:9, 3:2, 1:1, 2:3 and 9:16 presets.
+- Left/right rotation in 90-degree steps, with aspect-ratio-preserving or square-stretch export.
+- Handling of source rotation metadata during export to avoid applying the same rotation twice.
+- Localized video controls and crop accessibility instructions in English, German, French and Russian.
+- Improved export progress, failure and timeout handling, with tests for crop and timeline interactions.
+
+Build this fork to try these changes. The Google Play and release links below point to the upstream app.
+
 [![](https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg)](https://play.google.com/store/apps/details?id=de.loicezt.stickers)
 
 Or download from the latest [GitHub Release](https://github.com/lolocomotive/stickers/releases)
