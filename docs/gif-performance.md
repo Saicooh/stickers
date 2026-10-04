@@ -37,3 +37,22 @@ becomes the saved editing background when adding the sticker to a pack.
   `image_animation_encode.dart`, descriptor cleanup in `image_animation.dart`,
   and native finalization in `ImageAnimationEncoder.kt` / `libwebp_connector.cpp`.
   The filtered gallery selector and the existing video/crop controls are independent.
+
+## Crop page integration
+
+The crop page now shows GIF frame progress instead of subscribing to the video
+service. It reserves the last 5% for WebP assembly. Video services are created
+only for video sources, and unsuccessful imports remove their partial output.
+
+- `flutter test --no-pub`: all 35 tests passed. The crop widget regression checks
+  that GIF import uses the fast lossless settings, shows progress while assembly
+  is pending, and opens the generated background without modifying the source.
+- Focused `flutter analyze --no-pub` on the changed Dart sources, tests and
+  runtime harnesses: no issues found.
+- `flutter run --no-pub -d DEVICE -t tool/gif_crop_smoke.dart --dart-define=GIF_FILE=PATH`:
+  `GIF_CROP_SMOKE_OK`. On the same device/source, the real crop page took 3,493 ms
+  to create its background and 4,238 ms from Done to editor-controller readiness,
+  including file IO and initialization. Output: 57 frames, 3,790 ms.
+- Rollback boundary: progress/service lifecycle changes in `video_crop_page.dart`,
+  `gif_crop_page_test.dart` and `gif_crop_smoke.dart`. The encoder speed improvement
+  works independently of these page changes.

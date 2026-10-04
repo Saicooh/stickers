@@ -41,6 +41,7 @@ class _VideoCropPageState extends State<VideoCropPage> {
   late final AnimatedMediaController _controller;
   bool _ready = false;
   bool _exporting = false;
+  double? _exportProgress;
   RangeValues _range = const RangeValues(0, 1);
   Duration _seekTarget = Duration.zero;
   Future<void>? _seekTask;
@@ -114,7 +115,7 @@ class _VideoCropPageState extends State<VideoCropPage> {
     _controller.dispose();
     _playhead.dispose();
     _crop.dispose();
-    service.dispose();
+    _videoService?.dispose();
     super.dispose();
   }
 
@@ -360,15 +361,7 @@ class _VideoCropPageState extends State<VideoCropPage> {
                                 SizedBox(height: 8),
                                 Text(AppLocalizations.of(context)!.done),
                                 SizedBox(height: 8),
-                                if (_exporting)
-                                  StreamBuilder(
-                                    stream: service.progressStream,
-                                    builder: (context, asyncSnapshot) {
-                                      return LinearProgressIndicator(
-                                        value: asyncSnapshot.data?.progress,
-                                      );
-                                    },
-                                  ),
+                                if (_exporting) LinearProgressIndicator(value: _exportProgress),
                               ],
                             ),
                           ),
@@ -547,7 +540,7 @@ class _VideoCropPageState extends State<VideoCropPage> {
     }
   }
 
-  final CropAndScaleService service = CropAndScaleService();
+  CropAndScaleService? _videoService;
 
   bool _editing = false;
 
@@ -561,21 +554,16 @@ class _VideoCropPageState extends State<VideoCropPage> {
     final trimFailedMessage = AppLocalizations.of(context)!.trimFailedMsg;
     setState(() {
       _exporting = true;
+      _exportProgress = 0;
     });
-    final completion = Completer<Progress>();
-    final progressSubscription = service.progressStream.listen((progress) {
-      if (!completion.isCompleted &&
-          (progress.status == Status.SUCCESS ||
-              progress.status == Status.FAILED ||
-              progress.status == Status.CANCELLED)) {
-        completion.complete(progress);
-      }
-    });
+    StreamSubscription<Progress>? progressSubscription;
+    File? output;
+    var openedEditor = false;
     try {
       _shouldPlaySegment = false;
       await _controller.pause();
       final animation = _controller.animation;
-      final output = "$mediaCacheDir/import_${uid()}.${animation == null ? 'mp4' : 'webp'}";
+      output = File("$mediaCacheDir/import_${uid()}.${animation == null ? 'mp4' : 'webp'}");
       if (animation != null) {
         final data = await encodeImageAnimation(
           source: animation,
@@ -584,12 +572,26 @@ class _VideoCropPageState extends State<VideoCropPage> {
           crop: _crop.value,
           stretch: _stretch,
           quarterTurns: _quarterTurns,
+          onProgress: (progress) {
+            if (mounted) setState(() => _exportProgress = progress);
+          },
         );
-        await File(output).writeAsBytes(data);
+        await output.writeAsBytes(data);
       } else {
+        final service = _videoService ??= CropAndScaleService();
+        final completion = Completer<Progress>();
+        progressSubscription = service.progressStream.listen((progress) {
+          if (mounted) setState(() => _exportProgress = progress.progress);
+          if (!completion.isCompleted &&
+              (progress.status == Status.SUCCESS ||
+                  progress.status == Status.FAILED ||
+                  progress.status == Status.CANCELLED)) {
+            completion.complete(progress);
+          }
+        });
         await service.start(
           inputFile: widget.imagePath,
-          outputFile: output,
+          outputFile: output.path,
           start: _controller.value.duration * _range.start,
           end: _controller.value.duration * _range.end,
           crop: _crop.value,
@@ -605,11 +607,13 @@ class _VideoCropPageState extends State<VideoCropPage> {
         arguments: EditArguments(
           pack: widget.pack,
           index: widget.index,
-          mediaPath: output,
+          mediaPath: output.path,
           type: .video,
         ),
       );
+      openedEditor = true;
     } catch (e) {
+      await _videoService?.cancel();
       if (mounted) {
         showDialog<void>(
           context: context,
@@ -617,7 +621,8 @@ class _VideoCropPageState extends State<VideoCropPage> {
         );
       }
     } finally {
-      await progressSubscription.cancel();
+      await progressSubscription?.cancel();
+      if (!openedEditor && output != null && await output.exists()) await output.delete();
       if (mounted) setState(() => _exporting = false);
     }
   }
