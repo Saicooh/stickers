@@ -7,6 +7,7 @@ Simple android sticker maker for WhatsApp without ads.
 This fork of [lolocomotive/stickers](https://github.com/lolocomotive/stickers) improves the video editor for animated stickers:
 
 - A thumbnail timeline with draggable trim handles, a playback position marker, and start, end and clip-length timestamps.
+- Drag the selected clip sideways to move it without changing its duration; tap inside it to preview a position.
 - Frame-by-frame adjustments for the start and end of the selected clip.
 - Looping playback of the selected segment while editing.
 - A movable, resizable video crop with freeform selection and 16:9, 3:2, 1:1, 2:3 and 9:16 presets.

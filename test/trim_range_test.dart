@@ -6,6 +6,31 @@ void main() {
   const duration = Duration(seconds: 10);
   const range = RangeValues(.2, .8);
 
+  test('moving a selection shifts both boundaries and preserves its duration', () {
+    for (final delta in [-.1, .1]) {
+      final moved = shiftTrimRange(range, delta);
+      expect(moved.start, closeTo(range.start + delta, .000001));
+      expect(moved.end, closeTo(range.end + delta, .000001));
+      expect(moved.end - moved.start, closeTo(range.end - range.start, .000001));
+    }
+  });
+
+  test('moving past either video edge clamps the whole selection without shrinking it', () {
+    final left = shiftTrimRange(range, -2);
+    expect(left.start, 0);
+    expect(left.end, closeTo(.6, .000001));
+
+    final right = shiftTrimRange(range, 2);
+    expect(right.start, closeTo(.4, .000001));
+    expect(right.end, 1);
+  });
+
+  test('a selection spanning the full video cannot move', () {
+    const fullRange = RangeValues(0, 1);
+    expect(shiftTrimRange(fullRange, -1), fullRange);
+    expect(shiftTrimRange(fullRange, 1), fullRange);
+  });
+
   test('moving the start by a source frame changes only the start of the clip', () {
     final shorter = moveTrimBoundary(
       duration: duration,

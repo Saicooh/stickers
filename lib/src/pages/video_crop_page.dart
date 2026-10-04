@@ -391,12 +391,16 @@ class _VideoCropPageState extends State<VideoCropPage> {
   }
 
   void _changeRange(RangeValues values) {
+    if (values == _range) return;
     _playFromSelectionStart = true;
     final duration = _controller.value.duration;
     final minSpan = 100000 / duration.inMicroseconds;
     final RangeValues next;
     Duration seek;
-    if (values.start != _range.start) {
+    if (values.start != _range.start && values.end != _range.end) {
+      next = values;
+      seek = duration * next.start;
+    } else if (values.start != _range.start) {
       next = RangeValues(values.start.clamp(0.0, _range.end - minSpan), _range.end);
       seek = duration * next.start;
     } else {

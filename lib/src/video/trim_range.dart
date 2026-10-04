@@ -4,6 +4,12 @@ enum TrimEdge { start, end }
 
 const minimumTrimLength = Duration(milliseconds: 100);
 
+/// Moves the entire selection without changing its length or leaving the video.
+RangeValues shiftTrimRange(RangeValues range, double delta) {
+  final shift = delta.clamp(-range.start, 1.0 - range.end);
+  return RangeValues(range.start + shift, range.end + shift);
+}
+
 /// Seeks to the clip start after trimming or when too little selected video remains.
 Duration? playbackRestartPosition({
   required Duration duration,

@@ -11,7 +11,7 @@ String formatVideoTime(Duration time) {
   return '$minutes:${seconds.toString().padLeft(2, '0')}.${millis.toString().padLeft(3, '0')}';
 }
 
-enum _TimelineAction { start, end, seek }
+enum _TimelineAction { start, end, move, seek }
 
 class VideoTrimTimeline extends StatefulWidget {
   const VideoTrimTimeline({
@@ -53,6 +53,7 @@ class _VideoTrimTimelineState extends State<VideoTrimTimeline> {
   static const _inset = 16.0;
   int? _pointer;
   Offset? _down;
+  RangeValues? _dragRange;
   _TimelineAction? _action;
   bool _started = false;
   bool _vertical = false;
@@ -65,6 +66,11 @@ class _VideoTrimTimelineState extends State<VideoTrimTimeline> {
     final endX = _inset + (width - 2 * _inset) * widget.range.end;
     final startDistance = (x - startX).abs();
     final endDistance = (x - endX).abs();
+    // Leave an interior drag target even when the selection is narrower than the handles' hit areas.
+    final handleReach = ((endX - startX) / 3).clamp(0.0, 26.0);
+    if (x > startX && x < endX && startDistance > handleReach && endDistance > handleReach) {
+      return _TimelineAction.move;
+    }
     if (startDistance <= 26 || endDistance <= 26) {
       return startDistance <= endDistance ? _TimelineAction.start : _TimelineAction.end;
     }
@@ -88,6 +94,11 @@ class _VideoTrimTimelineState extends State<VideoTrimTimeline> {
         widget.onRangeChanged(RangeValues(fraction.clamp(0.0, widget.range.end), widget.range.end));
       case _TimelineAction.end:
         widget.onRangeChanged(RangeValues(widget.range.start, fraction.clamp(widget.range.start, 1.0)));
+      case _TimelineAction.move:
+        if (width > 2 * _inset) {
+          final delta = (x - _down!.dx) / (width - 2 * _inset);
+          widget.onRangeChanged(shiftTrimRange(_dragRange!, delta));
+        }
       case _TimelineAction.seek:
         final selected = fraction.clamp(widget.range.start, widget.range.end);
         widget.onSeekChanged(widget.duration * selected);
@@ -100,6 +111,7 @@ class _VideoTrimTimelineState extends State<VideoTrimTimeline> {
     if (!widget.enabled || _pointer != null) return;
     _pointer = event.pointer;
     _down = event.localPosition;
+    _dragRange = widget.range;
     _action = _actionAt(event.localPosition.dx, width);
     if (_action == _TimelineAction.start) widget.onEdgeSelected(TrimEdge.start);
     if (_action == _TimelineAction.end) widget.onEdgeSelected(TrimEdge.end);
@@ -124,6 +136,8 @@ class _VideoTrimTimelineState extends State<VideoTrimTimeline> {
   void _pointerUp(PointerUpEvent event, double width) {
     if (event.pointer != _pointer) return;
     if (!_vertical) {
+      // A tap previews a position; a horizontal drag moves the selection as a whole.
+      if (!_started && _action == _TimelineAction.move) _action = _TimelineAction.seek;
       if (!_started && _action == _TimelineAction.seek) _begin();
       if (_started) {
         _update(event.localPosition.dx, width);
@@ -141,6 +155,7 @@ class _VideoTrimTimelineState extends State<VideoTrimTimeline> {
   void _resetPointer() {
     _pointer = null;
     _down = null;
+    _dragRange = null;
     _action = null;
     _started = false;
     _vertical = false;
