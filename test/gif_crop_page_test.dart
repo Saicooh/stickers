@@ -17,6 +17,10 @@ void main() {
   testWidgets('GIF crop reports frame progress without a video service and opens the editable background', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     const channel = MethodChannel('de.loicezt.stickers/methods');
     final temporary = (await tester.runAsync(() => Directory.systemTemp.createTemp('gif_crop_page_test_')))!;
     final gif = (await tester.runAsync(
@@ -25,6 +29,7 @@ void main() {
     mediaCacheDir = temporary.path;
     final assembling = Completer<void>();
     final finish = Completer<void>();
+    final timestamps = <int>[];
     EditArguments? edit;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
       // There must be no startTrim/cancelTrim calls when importing a GIF.
@@ -36,15 +41,21 @@ void main() {
         expect(config['quality'], 0);
       }
       if (call.method == 'finishImageAnimation') {
+        expect((call.arguments as Map)['durationMs'], 275);
         assembling.complete();
         await finish.future;
         return Uint8List.fromList([1, 2, 3]);
       }
+      if (call.method == 'addImageAnimationFrame') timestamps.add((call.arguments as Map)['timestampMs'] as int);
       return null;
     });
     try {
       await tester.pumpWidget(
         MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.5)),
+            child: child!,
+          ),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: VideoCropPage(
@@ -69,6 +80,17 @@ void main() {
       });
       await tester.pump();
       expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed, isNotNull);
+      await tester.tap(find.byTooltip('Speed'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('2.0×'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(CheckedPopupMenuItem<double>, '2.0×'));
+      await tester.pumpAndSettle();
+      expect(find.text('2.0×'), findsOneWidget);
+      expect(find.text('0:00.275'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.text('Done'));
+      await tester.pumpAndSettle();
       await tester.runAsync(() async {
         await tester.tap(find.text('Done'));
         for (var i = 0; i < 100 && !assembling.isCompleted; i++) {
@@ -89,6 +111,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Sticker editor'), findsOneWidget);
       expect(edit?.type, MediaType.video);
+      expect(timestamps, [0, 50, 200]);
       await tester.runAsync(() async {
         expect(await File(edit!.mediaPath!).readAsBytes(), [1, 2, 3]);
         expect(await gif.readAsBytes(), base64Decode(transparentGif));

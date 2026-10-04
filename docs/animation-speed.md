@@ -1,6 +1,8 @@
-# Animation timing APIs
+# Animation speed
 
-Animated media preview and crop/export APIs accept a speed between 1.0 and 2.0, defaulting to 1.0. Native video crop applies it to the editable MP4; image animation export applies it to frame timestamps and duration. Media and pack metadata remain compatible with existing editors.
+In the video/GIF crop screen, tap the speed value beside Play to select 1.0× through 2.0× in 0.1× steps. 1.0× restores normal speed. The preview uses the chosen rate, while the timeline's start/end positions stay in source time. Clip length shows the accelerated output duration.
+
+Done applies the rate to the cropped media before opening the sticker editor. Saving, adding text/drawing, exporting and reopening that sticker all use this accelerated background. Speed is a crop choice, not a global setting; a new import starts at 1.0×.
 
 ## Timing and frames
 
@@ -12,8 +14,12 @@ Video crop retimes presentation timestamps in the native MP4 encoder, then sampl
 
 `flutter test test/image_animation_test.dart test/video_speed_service_test.dart`: 13 passing tests, including accelerated variable GIF delays/pixels/alpha, source trim boundaries, changing preview speed during playback, pause/seek retention, invalid speeds and the Android speed argument.
 
-Native runtime verification uses `tool/animation_speed_smoke.dart` on Xiaomi 2412DPC0AG: GIF durations are 500/367/275 ms at 1.1/1.5/2.0x with identical pixels/alpha. The 1,600 ms video selection exports WebP durations 1,608/1,465/1,085/791 ms at 1.0/1.1/1.5/2.0x, retaining 38/35/26/19 frames and transparent padding. This measures output timing, not encoding throughput.
+`flutter test test/gif_crop_page_test.dart`: 1 passing integration test opens the speed menu, selects 2.0×, checks the halved clip length, and confirms Done exports the corresponding timestamps. It runs at 360×800 logical pixels with 1.5× text scaling.
+
+`flutter run -t tool/animation_speed_smoke.dart` on Xiaomi 2412DPC0AG validates native GIF encoding, native MP4 crop, video preview speed, and final WebP export. A synthetic 550 ms GIF exports as 500/367/275 ms at 1.1×/1.5×/2.0×, with identical decoded pixels/alpha. A 60 ms GIF with short frame delays exports as 30 ms at 2.0×. A 1,600 ms video selection exports WebP durations of 1,608/1,465/1,085/791 ms at 1.0×/1.1×/1.5×/2.0×, retaining 38/35/26/19 frames and transparent padding. These are duration checks, not conversion speed benchmarks.
+
+The synthetic video fixture is generated with `ffmpeg -f lavfi -i testsrc2=size=384x256:rate=30:duration=2 -c:v libx264 -pix_fmt yuv420p source.mp4` and copied to the app's `cache/sticker_speed_source.mp4`. The harness writes to an owned temporary directory and never saves packs or settings.
 
 ## Rollback
 
-Revert the speed changes in `animated_media_controller.dart`, `image_animation_encode.dart`, `crop_scale.dart`, `MainActivity.kt`, `CropAndScale.kt` and the output-frame sampling in `OverlayAndEncode.kt`. Existing stickers remain readable because their speed is encoded in the media; pack and editor metadata formats do not change.
+The export/preview API can be reverted through the speed changes in `animated_media_controller.dart`, `image_animation_encode.dart`, `crop_scale.dart`, `MainActivity.kt`, `CropAndScale.kt` and the output-frame sampling in `OverlayAndEncode.kt`. Remove the speed control/clip-length integration in `video_crop_page.dart` and `video_trim_timeline.dart` to revert the UI. Existing stickers remain readable because their speed is encoded in the media; pack and editor metadata formats do not change.

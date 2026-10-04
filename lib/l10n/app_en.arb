@@ -161,6 +161,7 @@
   "clearCache": "Clear cache",
   "thisWillRestart": "This will restart the app",
   "backupPacks": "Back up all packs",
+  "animationSpeed": "Speed",
   "addPhotos": "Add several photos",
   "reviewStickers": "Review photos",
   "saveAllStickers": "{count, plural, =1{Save 1 sticker} other{Save {count} stickers}}",

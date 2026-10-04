@@ -28,10 +28,12 @@ class VideoTrimTimeline extends StatefulWidget {
     required this.onSeekEnd,
     required this.onEdgeSelected,
     this.positionOverride,
+    this.speed = 1,
     super.key,
   });
 
   final Duration duration;
+  final double speed;
   final RangeValues range;
   final ValueListenable<Duration> playhead;
   final Duration? positionOverride;
@@ -327,7 +329,7 @@ class _VideoTrimTimelineState extends State<VideoTrimTimeline> {
                 _ExpandedTimeRow(label: l10n.trimStart, value: formatVideoTime(widget.duration * widget.range.start)),
                 _ExpandedTimeRow(
                   label: l10n.clipLength,
-                  value: formatVideoTime(widget.duration * (widget.range.end - widget.range.start)),
+                  value: formatVideoTime(widget.duration * ((widget.range.end - widget.range.start) / widget.speed)),
                 ),
                 _ExpandedTimeRow(label: l10n.trimEnd, value: formatVideoTime(widget.duration * widget.range.end)),
               ],
@@ -342,7 +344,7 @@ class _VideoTrimTimelineState extends State<VideoTrimTimeline> {
                 ),
                 _TimeLabel(
                   label: l10n.clipLength,
-                  value: formatVideoTime(widget.duration * (widget.range.end - widget.range.start)),
+                  value: formatVideoTime(widget.duration * ((widget.range.end - widget.range.start) / widget.speed)),
                   alignment: CrossAxisAlignment.center,
                 ),
                 _TimeLabel(

@@ -143,6 +143,7 @@
     "clearCache": "Cache leeren",
     "thisWillRestart": "Die App wird dabei neu gestartet",
   "backupPacks": "Alle Stickerpakete sichern",
+  "animationSpeed": "Geschwindigkeit",
   "addPhotos": "Mehrere Fotos hinzufügen",
   "reviewStickers": "Fotos prüfen",
   "saveAllStickers": "{count} Sticker speichern",

@@ -146,6 +146,7 @@
   "clearCache": "Очистить кэш",
   "thisWillRestart": "Приложение перезапустится",
   "backupPacks": "Сохранить резервную копию всех наборов",
+  "animationSpeed": "Скорость",
   "addPhotos": "Добавить несколько фотографий",
   "reviewStickers": "Проверить фотографии",
   "saveAllStickers": "Сохранить стикеры: {count}",

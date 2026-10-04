@@ -19,6 +19,7 @@ This fork of [lolocomotive/stickers](https://github.com/lolocomotive/stickers) i
 - A thumbnail timeline with draggable trim handles, a playback position marker, and start, end and clip-length timestamps.
 - Drag the selected clip sideways to move it without changing its duration; tap inside it to preview a position.
 - Frame-by-frame adjustments for the start and end of the selected clip.
+- Speed up videos and GIFs from 1.0× to 2.0× in 0.1× steps, with matching preview and export; see [animation speed](docs/animation-speed.md).
 - Looping playback of the selected segment while editing.
 - A movable, resizable video crop with freeform selection and 16:9, 3:2, 1:1, 2:3 and 9:16 presets.
 - Left/right rotation in 90-degree steps, with aspect-ratio-preserving or square-stretch export.

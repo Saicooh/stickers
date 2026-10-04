@@ -62,6 +62,8 @@ class _VideoCropPageState extends State<VideoCropPage> {
   double? _aspectRatio;
   bool _stretch = false;
   int _quarterTurns = 0;
+  double _speed = 1;
+  bool _changingSpeed = false;
 
   @override
   void initState() {
@@ -138,12 +140,25 @@ class _VideoCropPageState extends State<VideoCropPage> {
     });
   }
 
+  Future<void> _setSpeed(double speed) async {
+    setState(() => _changingSpeed = true);
+    try {
+      await _controller.setPlaybackSpeed(speed);
+      if (mounted) setState(() => _speed = speed);
+    } on Exception catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) setState(() => _changingSpeed = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final canExport =
         _ready &&
         !_exporting &&
+        !_changingSpeed &&
         _controller.value.duration * (_range.end - _range.start) >= const Duration(milliseconds: 100);
     return PopScope(
       canPop: !_exporting,
@@ -262,6 +277,24 @@ class _VideoCropPageState extends State<VideoCropPage> {
                                   icon: Icon(video.isPlaying ? Icons.pause : Icons.play_arrow),
                                 ),
                               ),
+                              PopupMenuButton<double>(
+                                tooltip: l10n.animationSpeed,
+                                enabled: !_exporting && !_changingSpeed,
+                                initialValue: _speed,
+                                onSelected: _setSpeed,
+                                itemBuilder: (_) => [
+                                  for (var step = 10; step <= 20; step++)
+                                    CheckedPopupMenuItem(
+                                      value: step / 10,
+                                      checked: _speed == step / 10,
+                                      child: Text('${(step / 10).toStringAsFixed(1)}×'),
+                                    ),
+                                ],
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                  child: Text('${_speed.toStringAsFixed(1)}×'),
+                                ),
+                              ),
                             ],
                           ),
                           Row(
@@ -298,6 +331,7 @@ class _VideoCropPageState extends State<VideoCropPage> {
                         if (_ready)
                           VideoTrimTimeline(
                             duration: _controller.value.duration,
+                            speed: _speed,
                             range: _range,
                             playhead: _playhead,
                             positionOverride: _scrubPosition,
@@ -547,6 +581,7 @@ class _VideoCropPageState extends State<VideoCropPage> {
   Future<void> doCrop() async {
     if (!_ready ||
         _exporting ||
+        _changingSpeed ||
         _controller.value.duration == Duration.zero ||
         _controller.value.duration * (_range.end - _range.start) < const Duration(milliseconds: 100)) {
       return;
@@ -572,6 +607,7 @@ class _VideoCropPageState extends State<VideoCropPage> {
           crop: _crop.value,
           stretch: _stretch,
           quarterTurns: _quarterTurns,
+          speed: _speed,
           onProgress: (progress) {
             if (mounted) setState(() => _exportProgress = progress);
           },
@@ -597,6 +633,7 @@ class _VideoCropPageState extends State<VideoCropPage> {
           crop: _crop.value,
           stretch: _stretch,
           quarterTurns: _quarterTurns,
+          speed: _speed,
         );
         final progress = await completion.future.timeout(const Duration(minutes: 3));
         if (progress.status != Status.SUCCESS) throw Exception(trimFailedMessage);
