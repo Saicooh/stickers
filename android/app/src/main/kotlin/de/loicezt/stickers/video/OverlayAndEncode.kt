@@ -155,7 +155,7 @@ class OverlayAndEncode {
                 pixelBufferForOverlay.rewind()
                 overlayBitmap.copyPixelsFromBuffer(pixelBufferForOverlay)
 
-                glProcessor.setup(OUTPUT_DIMENSION, OUTPUT_DIMENSION, videoWidth, videoHeight)
+                glProcessor.setup(OUTPUT_DIMENSION, OUTPUT_DIMENSION, videoWidth, videoHeight, overlayBitmap)
                 webpEncoder.nativeInitEncoder(OUTPUT_DIMENSION, OUTPUT_DIMENSION, config)
 
                 decoder = MediaCodec.createDecoderByType(inputFormat.getString(MediaFormat.KEY_MIME)!!)
@@ -213,7 +213,7 @@ class OverlayAndEncode {
                         if (processThisFrame) {
                             try {
                                 glProcessor.awaitNewFrame()
-                                glProcessor.drawFrame(overlayBitmap)
+                                glProcessor.drawFrame()
                                 glProcessor.readPixels(pixelBufferForReadback)
 
                                 val timestampMs =

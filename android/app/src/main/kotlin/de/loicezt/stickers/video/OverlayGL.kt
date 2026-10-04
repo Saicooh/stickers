@@ -28,6 +28,11 @@ class OverlayGL : SurfaceTexture.OnFrameAvailableListener {
 
     private var videoProgramHandle = 0
     private var overlayProgramHandle = 0
+    private var videoTransformHandle = 0
+    private var videoPositionHandle = 0
+    private var videoTexCoordHandle = 0
+    private var overlayPositionHandle = 0
+    private var overlayTexCoordHandle = 0
 
     private var videoTextureHandle = 0
     private var overlayTextureHandle = 0
@@ -75,7 +80,7 @@ class OverlayGL : SurfaceTexture.OnFrameAvailableListener {
         frameSemaphore.release()
     }
 
-    fun setup(outputWidth: Int, outputHeight: Int, videoWidth: Int, videoHeight: Int) {
+    fun setup(outputWidth: Int, outputHeight: Int, videoWidth: Int, videoHeight: Int, overlayBitmap: Bitmap) {
         this.outputWidth = outputWidth
         this.outputHeight = outputHeight
         calculateViewport(videoWidth, videoHeight)
@@ -91,8 +96,21 @@ class OverlayGL : SurfaceTexture.OnFrameAvailableListener {
 
         videoProgramHandle = createProgram(VIDEO_VERTEX_SHADER, VIDEO_FRAGMENT_SHADER)
         overlayProgramHandle = createProgram(OVERLAY_VERTEX_SHADER, OVERLAY_FRAGMENT_SHADER)
+        videoTransformHandle = GLES20.glGetUniformLocation(videoProgramHandle, "uTransformMatrix")
+        videoPositionHandle = GLES20.glGetAttribLocation(videoProgramHandle, "aPosition")
+        videoTexCoordHandle = GLES20.glGetAttribLocation(videoProgramHandle, "aTexCoord")
+        overlayPositionHandle = GLES20.glGetAttribLocation(overlayProgramHandle, "aPosition")
+        overlayTexCoordHandle = GLES20.glGetAttribLocation(overlayProgramHandle, "aTexCoord")
+        GLES20.glUseProgram(videoProgramHandle)
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(videoProgramHandle, "sTexture"), 0)
+        GLES20.glUseProgram(overlayProgramHandle)
+        GLES20.glUniform1i(GLES20.glGetUniformLocation(overlayProgramHandle, "sTexture"), 1)
         videoTextureHandle = createExternalOESTexture()
         overlayTextureHandle = create2DTexture()
+        // The editor overlay is constant for this export. Upload once in this EGL context.
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, overlayTextureHandle)
+        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, overlayBitmap, 0)
         setupFBO()
 
         decoderSurfaceTexture = SurfaceTexture(videoTextureHandle)
@@ -121,7 +139,7 @@ class OverlayGL : SurfaceTexture.OnFrameAvailableListener {
         }
     }
 
-    fun drawFrame(overlayBitmap: Bitmap) {
+    fun drawFrame() {
         decoderSurfaceTexture.updateTexImage()
         decoderSurfaceTexture.getTransformMatrix(transformMatrix)
         Matrix.multiplyMM(finalMatrix, 0, transformMatrix, 0, flipMatrix, 0)
@@ -136,7 +154,7 @@ class OverlayGL : SurfaceTexture.OnFrameAvailableListener {
         drawVideo()
 
         GLES20.glViewport(0, 0, outputWidth, outputHeight)
-        drawOverlay(overlayBitmap)
+        drawOverlay()
 
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
     }
@@ -171,26 +189,18 @@ class OverlayGL : SurfaceTexture.OnFrameAvailableListener {
         GLES20.glUseProgram(videoProgramHandle)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, videoTextureHandle)
-        val uTransformMatrixHandle = GLES20.glGetUniformLocation(videoProgramHandle, "uTransformMatrix")
-        GLES20.glUniformMatrix4fv(uTransformMatrixHandle, 1, false, finalMatrix, 0)
-        renderQuad(GLES20.glGetAttribLocation(videoProgramHandle, "aPosition"),
-            GLES20.glGetAttribLocation(videoProgramHandle, "aTexCoord"), texCoordBuffer)
+        GLES20.glUniformMatrix4fv(videoTransformHandle, 1, false, finalMatrix, 0)
+        renderQuad(videoPositionHandle, videoTexCoordHandle, texCoordBuffer)
     }
 
-    private fun drawOverlay(bitmap: Bitmap) {
+    private fun drawOverlay() {
         GLES20.glUseProgram(overlayProgramHandle)
         GLES20.glEnable(GLES20.GL_BLEND)
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, overlayTextureHandle)
-        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0)
-
-        val uTextureHandle = GLES20.glGetUniformLocation(overlayProgramHandle, "sTexture")
-        GLES20.glUniform1i(uTextureHandle, 1)
-
-        renderQuad(GLES20.glGetAttribLocation(overlayProgramHandle, "aPosition"),
-            GLES20.glGetAttribLocation(overlayProgramHandle, "aTexCoord"), texCoordBuffer)
+        renderQuad(overlayPositionHandle, overlayTexCoordHandle, texCoordBuffer)
 
         GLES20.glDisable(GLES20.GL_BLEND)
     }
