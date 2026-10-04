@@ -525,7 +525,9 @@ class _EditPageState extends State<EditPage> {
     );
   }
 
-  void _addText() {
+  void _addText() async {
+    await FontsRegistry.init();
+    if (!mounted) return;
     _drawing = false;
     EditorText text = EditorText(
       outlineWidth: 10,
@@ -550,10 +552,14 @@ class _EditPageState extends State<EditPage> {
   }
 
   Future<void> addSticker(BuildContext context, {bool replace = false}) async {
+    var restoreTextScale = false;
     setState(() {
       _exporting = true;
     });
     try {
+      await FontsRegistry.prepareForExport(_texts.map((text) => text.fontName));
+      if (!context.mounted) return;
+      restoreTextScale = true;
       final option = ImageEditorOption();
       for (EditorLayer layer in _layers) {
         final Option layerOption;
@@ -593,7 +599,7 @@ class _EditPageState extends State<EditPage> {
       Navigator.of(context).pop();
       Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) {
+      if (context.mounted) {
         showDialog(
             context: context,
             builder: (context) {
@@ -605,7 +611,7 @@ class _EditPageState extends State<EditPage> {
       }
     } finally {
       //This is useless if the screen goes away but useful for debugging
-      denormalizeTexts();
+      if (restoreTextScale) denormalizeTexts();
       if (mounted) setState(() => _exporting = false);
     }
     return;

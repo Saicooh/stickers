@@ -42,25 +42,6 @@ Future<String?> registerFont(FontsRegistryEntry entry) async {
   return fontFile.path;
 }
 
-/// This registers the bundled fonts to the Image editor plugin - not the flutter engine.
-Future<void> loadFonts(List<FontsRegistryEntry> fonts) async {
-  debugPrint("Registering fonts...");
-  Stopwatch sw = Stopwatch()..start();
-  Directory fontsDir = Directory(bundledFontsDir);
-  final futures = <Future>[];
-  for (final font in fonts) {
-    futures.add((() async {
-      if (font.type == FontType.bundled) {
-        font.fontFile = await _registerBundledFont(font.family, fontsDir);
-      } else {
-        await registerFont(font);
-      }
-    }).call());
-  }
-  await Future.wait(futures);
-  debugPrint("${fonts.length} fonts registered in ${sw.elapsedMilliseconds}ms");
-}
-
 final List<FontsRegistryEntry> _bundledFonts = [
   FontsRegistryEntry("sans-serif", FontType.bundled, display: "Classic"),
   FontsRegistryEntry("Saira Stencil One", FontType.bundled, display: "Stencil"),
@@ -85,8 +66,15 @@ class FontsRegistryEntry {
   FontType type;
   double sizeMultiplier;
 
-  FontsRegistryEntry(this.family, this.type,
-      {this.isLoaded = false, this.previewFile, this.fontFile, this.sizeMultiplier = 1, this.display});
+  FontsRegistryEntry(
+    this.family,
+    this.type, {
+    this.isLoaded = false,
+    this.previewFile,
+    this.fontFile,
+    this.sizeMultiplier = 1,
+    this.display,
+  });
 
   Map<String, dynamic> toJson() {
     return {
@@ -137,11 +125,12 @@ class FontsRegistry {
   static late File _config;
 
   static bool _init = false;
+  static Future<void>? _initialization;
+  static final _nativeFonts = <String, Future<void>>{};
 
-  static Future<void> init() async {
-    if (_init) {
-      throw Exception("Already initialized or initializing");
-    }
+  static Future<void> init() => _initialization ??= _initialize();
+
+  static Future<void> _initialize() async {
     _init = true;
 
     try {
@@ -149,9 +138,9 @@ class FontsRegistry {
       try {
         if (await _config.exists()) {
           Stopwatch sw = Stopwatch()..start();
-          final List<FontsRegistryEntry> data = jsonDecode(await _config.readAsString())
-              .map<FontsRegistryEntry>((e) => FontsRegistryEntry.fromJson(e))
-              .toList();
+          final List<FontsRegistryEntry> data = jsonDecode(
+            await _config.readAsString(),
+          ).map<FontsRegistryEntry>((e) => FontsRegistryEntry.fromJson(e)).toList();
           debugPrint("[FontsRegistry] read t=${sw.elapsedMilliseconds}ms");
           final registerTasks = <Future>[];
           for (final f in data) {
@@ -178,7 +167,6 @@ class FontsRegistry {
             f.isLoaded = true;
           }
 
-          registerTasks.add(loadFonts(_orderedEntries));
           await Future.wait(registerTasks);
           debugPrint("[FontsRegistry] loaded ${_entries.length} fonts in ${sw.elapsedMilliseconds}ms");
           return;
@@ -195,18 +183,44 @@ class FontsRegistry {
         _orderedEntries.add(f);
         f.isLoaded = true;
       }
-      await loadFonts(_orderedEntries);
       enqueueSave();
     } on Exception catch (_) {
       _init = false;
+      _initialization = null;
       rethrow;
+    }
+  }
+
+  /// Register only the fonts used by native text export, once per process.
+  static Future<void> prepareForExport(Iterable<String> families) async {
+    await init();
+    for (final family in families.toSet()) {
+      if (family == 'sans-serif' || family == 'monospace') continue;
+      final operation = _nativeFonts.putIfAbsent(family, () async {
+        // Yield so the future is cached before any registration can fail.
+        await Future<void>.value();
+        final entry = _entries[family];
+        if (entry == null) throw StateError('Font not installed: $family');
+        if (entry.type == FontType.bundled) {
+          entry.fontFile = await _registerBundledFont(family, Directory(bundledFontsDir));
+        } else {
+          await registerFont(entry);
+        }
+      });
+      try {
+        await operation;
+      } catch (_) {
+        _nativeFonts.remove(family);
+        rethrow;
+      }
     }
   }
 
   static Future<void> _registerFontToEngine(FontsRegistryEntry f, bool preview) async {
     final loader = FontLoader("${f.family}${preview ? '-PREVIEW' : ''}");
     loader.addFont(
-        Future.value(ByteData.view((await File(preview ? f.previewFile! : f.fontFile!).readAsBytes()).buffer)));
+      Future.value(ByteData.view((await File(preview ? f.previewFile! : f.fontFile!).readAsBytes()).buffer)),
+    );
     await loader.load();
   }
 
@@ -238,7 +252,7 @@ class FontsRegistry {
   static void enqueueSave() {
     final saveIDCopy = ++_saveID;
     Future.delayed(cooldown, () {
-// This ensures only the last called save actually saves
+      // This ensures only the last called save actually saves
       if (_saveID == saveIDCopy) {
         save();
       }
@@ -250,9 +264,8 @@ class FontsRegistry {
     List data = [];
 
     data.addAll(_orderedEntries.map((e) => e.toJson()));
-// The logic here is that all entries that have a font file (not only preview) should already be in the list,
-// so this should be sufficient to deduplicate the data. (except for sans-serif)
-    data.addAll(_entries.values.where((f) => f.fontFile == null && f.family != "sans-serif").map((e) => e.toJson()));
+    // Bundled fonts remain ordered even before their native font files are needed.
+    data.addAll(_entries.values.where((f) => !_orderedEntries.contains(f)).map((e) => e.toJson()));
 
     await _config.create(recursive: true);
     await _config.writeAsString(jsonEncode(data));
@@ -268,8 +281,9 @@ class FontsRegistry {
       File(entry.fontFile!).delete();
     }
     if (entry.previewFile != null) {
-      File(entry.fontFile!).delete();
+      File(entry.previewFile!).delete();
     }
+    _nativeFonts.remove(fontName);
     _orderedEntries.remove(entry);
     enqueueSave();
   }
