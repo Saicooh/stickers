@@ -145,5 +145,10 @@
   "fontsManagerDetails": "Управление шрифтами",
   "clearCache": "Очистить кэш",
   "thisWillRestart": "Приложение перезапустится",
-  "backupPacks": "Сохранить резервную копию всех наборов"
+  "backupPacks": "Сохранить резервную копию всех наборов",
+  "addPhotos": "Добавить несколько фотографий",
+  "reviewStickers": "Проверить фотографии",
+  "saveAllStickers": "Сохранить стикеры: {count}",
+  "savingStickers": "{current} из {total}",
+  "batchImportErrors": "Некоторые фотографии не удалось обработать. Обрежьте или удалите их перед сохранением."
 }

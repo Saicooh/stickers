@@ -142,5 +142,10 @@
   "fontsManagerDetails": "Ajouter/supprimer des polices de l'application",
   "clearCache": "Vider le cache",
   "thisWillRestart": "Ceci redémarrera l'application",
-  "backupPacks": "Sauvegarder tous les packs"
+  "backupPacks": "Sauvegarder tous les packs",
+  "addPhotos": "Ajouter plusieurs photos",
+  "reviewStickers": "Vérifier les photos",
+  "saveAllStickers": "{count, plural, =1{Enregistrer 1 sticker} other{Enregistrer {count} stickers}}",
+  "savingStickers": "{current} sur {total}",
+  "batchImportErrors": "Certaines photos n’ont pas pu être traitées. Recadrez-les ou retirez-les avant d’enregistrer."
 }

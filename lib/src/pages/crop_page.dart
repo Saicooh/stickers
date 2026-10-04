@@ -15,12 +15,14 @@ class CropPage extends StatefulWidget {
   final StickerPack pack;
   final int index;
   final String imagePath;
+  final bool returnCrop;
   final GlobalKey<ExtendedImageEditorState> editorKey = GlobalKey<ExtendedImageEditorState>();
 
   CropPage({
     required this.pack,
     required this.index,
     required this.imagePath,
+    this.returnCrop = false,
     super.key,
   });
 
@@ -292,6 +294,10 @@ class _CropPageState extends State<CropPage> with TickerProviderStateMixin {
       _editorController.rotateDegrees,
       _stretch,
     );
+    if (widget.returnCrop) {
+      if (mounted) Navigator.of(context).pop(cropped);
+      return;
+    }
     final output = await saveTemp(cropped);
     if (!mounted) return;
     Navigator.of(context).pushNamed(

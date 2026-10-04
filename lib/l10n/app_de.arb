@@ -142,5 +142,10 @@
     "fontsManagerDetails": "Schriftarten zur App hinzufügen oder entfernen",
     "clearCache": "Cache leeren",
     "thisWillRestart": "Die App wird dabei neu gestartet",
-  "backupPacks": "Alle Stickerpakete sichern"
+  "backupPacks": "Alle Stickerpakete sichern",
+  "addPhotos": "Mehrere Fotos hinzufügen",
+  "reviewStickers": "Fotos prüfen",
+  "saveAllStickers": "{count} Sticker speichern",
+  "savingStickers": "{current} von {total}",
+  "batchImportErrors": "Einige Fotos konnten nicht verarbeitet werden. Schneide sie zu oder entferne sie vor dem Speichern."
 }

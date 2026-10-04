@@ -160,5 +160,27 @@
   "fontsManagerDetails": "Add/remove fonts of the app",
   "clearCache": "Clear cache",
   "thisWillRestart": "This will restart the app",
-  "backupPacks": "Back up all packs"
+  "backupPacks": "Back up all packs",
+  "addPhotos": "Add several photos",
+  "reviewStickers": "Review photos",
+  "saveAllStickers": "{count, plural, =1{Save 1 sticker} other{Save {count} stickers}}",
+  "savingStickers": "{current} of {total}",
+  "batchImportErrors": "Some photos could not be processed. Crop or remove them before saving.",
+  "@saveAllStickers": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@savingStickers": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  }
 }

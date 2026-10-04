@@ -13,6 +13,7 @@ import 'package:stickers/src/dialogs/error_dialog.dart';
 import 'package:stickers/src/globals.dart';
 import 'package:stickers/src/pages/crop_page.dart';
 import 'package:stickers/src/pages/default_page.dart';
+import 'package:stickers/src/pages/multi_crop_page.dart';
 import 'package:stickers/src/util.dart';
 import 'package:stickers/src/video/animated_media_picker.dart';
 import 'package:stickers/src/widgets/sticker_thumbnail.dart';
@@ -38,6 +39,12 @@ class StickerPackPageState extends State<StickerPackPage> {
           Expanded(
             child: DefaultSliverActivity(
               actions: [
+                if (!widget.pack.animated)
+                  IconButton(
+                    tooltip: AppLocalizations.of(context)!.addPhotos,
+                    onPressed: widget.pack.stickers.length >= 30 ? null : _addPhotos,
+                    icon: const Icon(Icons.photo_library_outlined),
+                  ),
                 IconButton(
                   tooltip: AppLocalizations.of(context)!.edit,
                   onPressed: () {
@@ -255,6 +262,29 @@ class StickerPackPageState extends State<StickerPackPage> {
               );
             });
       }
+    }
+  }
+
+  Future<void> _addPhotos() async {
+    final remaining = 30 - widget.pack.stickers.length;
+    if (remaining < 2) return _createSticker(widget.pack.stickers.length);
+    try {
+      final photos = await ImagePicker().pickMultiImage(limit: remaining);
+      if (!mounted || photos.isEmpty) return;
+      if (photos.length > remaining) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(AppLocalizations.of(context)!.youCanTHaveMoreThan30Stickers),
+        ));
+      }
+      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => MultiCropPage(
+        pack: widget.pack, paths: photos.take(remaining).map((photo) => photo.path).toList(),
+      )));
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (!mounted) return;
+      showDialog<void>(context: context, builder: (_) => ErrorDialog(
+        title: AppLocalizations.of(context)!.couldntLoadMedia, message: error.toString(),
+      ));
     }
   }
 }

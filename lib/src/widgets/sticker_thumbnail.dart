@@ -25,7 +25,8 @@ class StickerThumbnail extends StatelessWidget {
                 height: pixels(constraints.maxHeight),
                 policy: ResizeImagePolicy.fit,
               ),
-              fit: BoxFit.contain,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stack) => const Icon(Icons.broken_image_outlined),
             ),
           ),
         );
