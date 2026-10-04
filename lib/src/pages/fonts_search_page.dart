@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:stickers/generated/intl/app_localizations.dart';
 import 'package:stickers/src/fonts_api/fonts_models.dart';
@@ -76,8 +78,9 @@ class _FontsSearchPageState extends State<FontsSearchPage> {
 
 class GoogleFontPreview extends StatefulWidget {
   final WebFont font;
+  final Future<void> Function(WebFont) loadPreview;
 
-  const GoogleFontPreview(this.font, {super.key});
+  const GoogleFontPreview(this.font, {super.key, this.loadPreview = downloadAndRegisterFontPreview});
 
   @override
   State<GoogleFontPreview> createState() => _GoogleFontPreviewState();
@@ -86,26 +89,43 @@ class GoogleFontPreview extends StatefulWidget {
 class _GoogleFontPreviewState extends State<GoogleFontPreview> {
   Future? _future;
   bool _delayOver = false;
+  Timer? _previewTimer;
 
   @override
   void initState() {
-    Future.delayed(Duration(milliseconds: 300), () {
-      if (!mounted) return;
-      setState(() {
-        _delayOver = true;
-      });
-    });
-    if (!FontsRegistry.contains(widget.font.family)) {
-      _future = downloadAndRegisterFontPreview(widget.font).then((_) {
-        // We have to return something here or the FutureBuilder doesn't work as it should
-        if (!mounted) return 1;
-        setState(() {});
-        return 0;
-      });
-    } else {
-      _future = Future.value(0);
-    }
     super.initState();
+    _schedulePreview();
+  }
+
+  void _schedulePreview() {
+    _previewTimer?.cancel();
+    _future = null;
+    _delayOver = false;
+    _previewTimer = Timer(const Duration(milliseconds: 300), _loadPreview);
+  }
+
+  void _loadPreview() {
+    if (!mounted) return;
+    if (Scrollable.recommendDeferredLoadingForContext(context)) {
+      _previewTimer = Timer(const Duration(milliseconds: 120), _loadPreview);
+      return;
+    }
+    setState(() {
+      _delayOver = true;
+      _future = widget.loadPreview(widget.font).then((_) => 0);
+    });
+  }
+
+  @override
+  void didUpdateWidget(GoogleFontPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.font.family != widget.font.family) _schedulePreview();
+  }
+
+  @override
+  void dispose() {
+    _previewTimer?.cancel();
+    super.dispose();
   }
 
   @override

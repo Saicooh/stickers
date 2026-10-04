@@ -9,13 +9,12 @@ class GoogleFontsReply {
 
   factory GoogleFontsReply.fromJson(Map<String, dynamic> json) {
     return GoogleFontsReply(
-      kind: json['kind'],
-      items: (json['items'] as List)
-          .map((item) => WebFont.fromJson(item))
-          .toList(),
+      kind: json['kind'] ?? 'webfonts#webfontList',
+      items: ((json['items'] ?? []) as List).map((item) => WebFont.fromJson(item)).toList(),
     );
   }
 }
+
 class WebFont {
   final String family;
   final List<String> variants;
@@ -43,13 +42,13 @@ class WebFont {
     return WebFont(
       family: json['family'],
       variants: List<String>.from(json['variants']),
-      subsets: List<String>.from(json['subsets']),
-      version: json['version'],
-      lastModified: json['lastModified'],
+      subsets: List<String>.from(json['subsets'] ?? []),
+      version: json['version'] ?? '',
+      lastModified: json['lastModified'] ?? '',
       files: Map<String, String>.from(json['files']),
-      category: json['category'],
-      kind: json['kind'],
-      menu: json['menu'],
+      category: json['category'] ?? '',
+      kind: json['kind'] ?? 'webfonts#webfont',
+      menu: json['menu'] ?? '',
     );
   }
 }

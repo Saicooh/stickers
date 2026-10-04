@@ -1,10 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:extended_image/extended_image.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:stickers/src/fonts_api/fonts_models.dart';
 import 'package:stickers/src/fonts_api/fonts_registry.dart';
 import 'package:stickers/src/globals.dart';
@@ -37,15 +36,19 @@ Future<GoogleFontsReply> getFonts({String? family, String? category}) async {
       debugPrintStack(stackTrace: st);
     }
   }
-  Uri uri = Uri.parse(apiURL).replace(queryParameters: {
-    "key": fontsKey,
-    if (family != null) "family": family,
-    if (category != null) "category": category,
-  });
-  final response = await get(uri);
+  Uri uri = Uri.parse(apiURL).replace(
+    queryParameters: {
+      "key": fontsKey,
+      "family": ?family,
+      "category": ?category,
+    },
+  );
+  final response = await http.get(uri);
+  if (response.statusCode != 200) throw HttpException('Google Fonts returned HTTP ${response.statusCode}');
+  final reply = GoogleFontsReply.fromJson(jsonDecode(response.body));
   await fontsListCache.create(recursive: true);
   await fontsListCache.writeAsString(response.body);
-  return GoogleFontsReply.fromJson(jsonDecode(response.body));
+  return reply;
 }
 
 double totalDownload = 0;
@@ -54,7 +57,8 @@ Future<void> downloadAndRegisterFont(WebFont font) async {
   final entry = FontsRegistry.get(font.family) ?? FontsRegistryEntry(font.family, FontType.googleFont);
   await Directory(googleFontsDir).create(recursive: true);
   File dest = File("$googleFontsDir/${font.family}.ttf");
-  final result = await get(Uri.parse(font.files["regular"] ?? font.files[font.variants.first]!));
+  final result = await http.get(Uri.parse(font.files["regular"] ?? font.files[font.variants.first]!));
+  if (result.statusCode != 200) throw HttpException('Font download returned HTTP ${result.statusCode}');
   await dest.writeAsBytes(result.bodyBytes);
   final loader = FontLoader(font.family);
   loader.addFont(Future.value(ByteData.view(result.bodyBytes.buffer)));
@@ -64,39 +68,60 @@ Future<void> downloadAndRegisterFont(WebFont font) async {
   await registerFont(entry);
 }
 
-Future<void> downloadAndRegisterFontPreview(WebFont font) async {
-  print("Downloading font ${font.family}");
-  if (FontsRegistry.contains(font.family)) {
-    if (FontsRegistry.get(font.family)?.previewFile != null) {
-      return;
+final _previewDownloads = <String, Future<void>>{};
+
+Future<void> downloadAndRegisterFontPreview(WebFont font, {http.Client? client}) {
+  return _previewDownloads.putIfAbsent(font.family, () async {
+    try {
+      await _downloadFontPreview(font, client);
+    } finally {
+      _previewDownloads.remove(font.family);
     }
+  });
+}
+
+Future<void> _downloadFontPreview(WebFont font, http.Client? client) async {
+  await FontsRegistry.init();
+  final existing = FontsRegistry.get(font.family);
+  if (existing?.fontFile != null || (existing?.isLoaded == true && existing?.previewFile != null)) return;
+  if (existing?.previewFile != null && await File(existing!.previewFile!).exists()) {
+    final loader = FontLoader('${font.family}-PREVIEW');
+    loader.addFont(Future.value(ByteData.sublistView(await File(existing.previewFile!).readAsBytes())));
+    await loader.load();
+    existing.isLoaded = true;
+    return;
   }
-  FontsRegistry.put(font.family, FontsRegistryEntry(font.family, FontType.googleFont));
 
   // Downloading font files for all of these fonts would use up almost 1GB of data, which is why we only download
   // a preview version of the font, capable of displaying only the font name, cutting the total download down to ~35MB
   // This unfortunately means we have to parse CSS as the official API does not provide this feature.
   // In the flutter engine, this preview font is registered as $family-PREVIEW.
   // In the editor plugin, this preview font is not registered at all.
-  var result = await get(
-      Uri.parse("https://fonts.googleapis.com/css2?family=${font.family}&sort=popularity&text=${font.family}"));
+  final uri = Uri.https('fonts.googleapis.com', '/css2', {'family': font.family, 'text': font.family});
+  var result = await (client?.get(uri) ?? http.get(uri));
+  if (result.statusCode != 200) throw HttpException('Font preview returned HTTP ${result.statusCode}');
   totalDownload += (result.contentLength ?? 0) / 1000.0;
 
   final regex = RegExp(r"url\((.*?)\)", dotAll: true);
   final match = regex.firstMatch(result.body);
   final fontUrl = match?.group(1)?.trim();
 
-  result = await get(Uri.parse(fontUrl!));
+  if (fontUrl == null) throw const FormatException('Missing preview font URL');
+  result = await (client?.get(Uri.parse(fontUrl)) ?? http.get(Uri.parse(fontUrl)));
+  if (result.statusCode != 200) throw HttpException('Font file returned HTTP ${result.statusCode}');
   totalDownload += (result.contentLength ?? 0) / 1000.0;
   debugPrint("Total: $totalDownload kB");
 
   debugPrint("Downloaded preview font ${font.family}");
 
   File dest = File("$fontsCacheDir/${font.family}.ttf");
-  FontsRegistry.get(font.family)!.previewFile = dest.path;
+  await dest.parent.create(recursive: true);
   await dest.writeAsBytes(result.bodyBytes);
   final loader = FontLoader("${font.family}-PREVIEW");
   loader.addFont(Future.value(ByteData.view(result.bodyBytes.buffer)));
   await loader.load();
-  FontsRegistry.get(font.family)!.isLoaded = true;
+  final entry = FontsRegistry.get(font.family) ?? FontsRegistryEntry(font.family, FontType.googleFont);
+  entry.previewFile = dest.path;
+  entry.isLoaded = true;
+  FontsRegistry.put(font.family, entry);
 }
