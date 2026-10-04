@@ -18,6 +18,8 @@ The reader accepts old single-pack ZIPs, repairs older hardcoded background exte
 
 `flutter run -t tool/remaining_fork_smoke.dart` on Xiaomi 2412DPC0AG: a static and animated pack round-trip through the actual Android ZIP plugin, producing four packs alongside the originals. Sticker bytes, GIF pixels, transparency and timing remain identical. A deliberately failed manifest save rolls back the import without changing the previous manifest.
 
+`flutter run --dart-define=SKIP_CROP_UI=true -t tool/remaining_fork_smoke.dart` also verifies a restored image layer through the native export plugin: the center remains opaque and the surrounding canvas transparent. This mode tests the batch backend directly and can run with the display locked; the crop UI was checked separately in the normal mode.
+
 ## Source and rollback
 
 Adapted from lueefr's [multi-pack backup](https://github.com/lueefr/stickers/commit/ee280796360c3f7e82825b5a9a87a418a0f3f435), extended here to preserve editable assets.
