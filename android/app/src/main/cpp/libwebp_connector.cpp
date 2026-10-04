@@ -420,8 +420,6 @@ Java_de_loicezt_stickers_video_LibWebP_nativeAddFrame(
         const char *error_string = getWebPErrorString(pic.error_code);
         LOGE("Failed to add frame to WebPAnimEncoder at timestamp %d. Error: %s (%d)",
              timestampMs, error_string, pic.error_code);
-    } else {
-        LOGI("Added frame at Timestamp %d", timestampMs);
     }
 
     WebPPictureFree(&pic); // Free the picture memory
@@ -438,11 +436,15 @@ Java_de_loicezt_stickers_video_LibWebP_nativeReleaseEncoder(
     if (state == nullptr) { /* ... error handling ... */ return nullptr; }
 
     // Assemble the animation
-    WebPAnimEncoderAdd(state->anim_encoder, nullptr, endTimestampMs, nullptr);
     WebPData webp_data;
     WebPDataInit(&webp_data);
-    if (!WebPAnimEncoderAssemble(state->anim_encoder, &webp_data)) {
+    // Image animations supply an exact end time. Legacy video exports use 0
+    // and let libwebp infer the last frame duration from preceding frames.
+    if ((endTimestampMs > 0 &&
+         !WebPAnimEncoderAdd(state->anim_encoder, nullptr, endTimestampMs, nullptr)) ||
+        !WebPAnimEncoderAssemble(state->anim_encoder, &webp_data)) {
         LOGE("Failed to assemble final WebP animation.");
+        WebPDataClear(&webp_data);
         WebPAnimEncoderDelete(state->anim_encoder);
         delete state;
         state = nullptr;
@@ -451,12 +453,11 @@ Java_de_loicezt_stickers_video_LibWebP_nativeReleaseEncoder(
 
     LOGI("Successfully assembled WebP data. Size: %zu bytes", webp_data.size);
 
-    // --- NEW: Create a Java byte array and copy the data into it ---
     jbyteArray byteArray = env->NewByteArray(webp_data.size);
-    void *temp = env->GetPrimitiveArrayCritical(byteArray, nullptr);
-    memcpy(temp, webp_data.bytes, webp_data.size);
-    env->ReleasePrimitiveArrayCritical(byteArray, temp, 0);
-    // --- End of new code ---
+    if (byteArray != nullptr) {
+        env->SetByteArrayRegion(byteArray, 0, webp_data.size,
+                               reinterpret_cast<const jbyte *>(webp_data.bytes));
+    }
 
     // Cleanup
     WebPDataClear(&webp_data);

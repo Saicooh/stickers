@@ -135,4 +135,58 @@ void main() {
     );
     expect(calls.last, 'cancelImageAnimation');
   });
+
+  test('crop progress reaches completion only after the native container is assembled', () async {
+    final progress = <double>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'finishImageAnimation') {
+        expect(progress.last, closeTo(.95, .001));
+        return Uint8List.fromList([1]);
+      }
+      return null;
+    });
+    await encodeImageAnimation(source: await ImageAnimation.load(gif), onProgress: progress.add);
+    expect(progress.first, 0);
+    expect(progress.last, 1);
+    expect(progress, orderedEquals([...progress]..sort()));
+  });
+
+  test('submillisecond trim edges cannot send duplicate WebP frame timestamps', () async {
+    final timestamps = <int>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'addImageAnimationFrame') {
+        timestamps.add((call.arguments as Map)['timestampMs'] as int);
+      }
+      if (call.method == 'finishImageAnimation') {
+        expect((call.arguments as Map)['durationMs'], 350);
+        return Uint8List.fromList([1]);
+      }
+      return null;
+    });
+    await encodeImageAnimation(
+      source: await ImageAnimation.load(gif),
+      start: const Duration(microseconds: 99900),
+      end: const Duration(microseconds: 449900),
+    );
+    expect(timestamps, [0, 300]);
+  });
+
+  test('cleanup failure does not hide the original encoder error and a retry can succeed', () async {
+    var failed = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'addImageAnimationFrame' && !failed) {
+        failed = true;
+        throw PlatformException(code: 'ENCODE_FAILED');
+      }
+      if (call.method == 'cancelImageAnimation') throw PlatformException(code: 'CLEANUP_FAILED');
+      if (call.method == 'finishImageAnimation') return Uint8List.fromList([1]);
+      return null;
+    });
+    final source = await ImageAnimation.load(gif);
+    await expectLater(
+      encodeImageAnimation(source: source),
+      throwsA(isA<PlatformException>().having((error) => error.code, 'code', 'ENCODE_FAILED')),
+    );
+    expect(await encodeImageAnimation(source: source), [1]);
+  });
 }

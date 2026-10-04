@@ -9,6 +9,8 @@ import 'image_animation.dart';
 
 /// Streams straight-alpha RGBA frames to the existing libwebp encoder.
 /// No video intermediate is used, so transparent GIFs stay transparent.
+/// The lossless default favors speed for editable backgrounds. In lossless
+/// mode, quality controls compression effort, not pixel fidelity.
 Future<Uint8List> encodeImageAnimation({
   required ImageAnimation source,
   Duration start = Duration.zero,
@@ -17,15 +19,21 @@ Future<Uint8List> encodeImageAnimation({
   bool stretch = false,
   int quarterTurns = 0,
   File? overlay,
-  WebPConfig config = const WebPConfig(lossless: true, quality: 100, method: 4),
+  WebPConfig config = const WebPConfig(lossless: true, quality: 0, method: 0),
   int? fps,
   void Function(double)? onProgress,
 }) async {
   const channel = MethodChannel('de.loicezt.stickers/methods');
-  final stop = end ?? source.duration;
+  var stop = end ?? source.duration;
   if (start < Duration.zero || stop > source.duration || stop <= start) {
     throw ArgumentError('Invalid animation trim range');
   }
+  // Timeline drags have microsecond precision; WebP timestamps are whole ms.
+  // Snap both edges before selecting frames to avoid two frames at timestamp 0.
+  start = Duration(milliseconds: (start.inMicroseconds / 1000).round());
+  stop = Duration(milliseconds: (stop.inMicroseconds / 1000).round());
+  if (stop <= start) throw ArgumentError('Animation trim range must cover at least one millisecond');
+  if (fps != null && fps <= 0) throw ArgumentError.value(fps, 'fps', 'Must be positive');
   final decoder = await source.codec();
   ui.Image? overlayImage;
   var started = false;
@@ -40,6 +48,7 @@ Future<Uint8List> encodeImageAnimation({
     }
     await channel.invokeMethod<void>('beginImageAnimation', {'config': config.toMap()});
     started = true;
+    onProgress?.call(0);
     var lastTimestamp = -1;
     for (var i = 0; i < source.starts.length; i++) {
       final frameStart = source.starts[i];
@@ -59,7 +68,8 @@ Future<Uint8List> encodeImageAnimation({
         );
         await channel.invokeMethod<void>('addImageAnimationFrame', {'pixels': pixels, 'timestampMs': timestamp});
         lastTimestamp = timestamp;
-        onProgress?.call(((frameEnd - start).inMicroseconds / (stop - start).inMicroseconds).clamp(0, 1));
+        // Leave room for the native encoder to assemble the final container.
+        onProgress?.call(.95 * ((frameEnd - start).inMicroseconds / (stop - start).inMicroseconds).clamp(0, 1));
       } finally {
         frame.image.dispose();
       }
@@ -69,11 +79,19 @@ Future<Uint8List> encodeImageAnimation({
       {'durationMs': (stop - start).inMilliseconds},
     );
     if (data == null || data.isEmpty) throw StateError('Could not encode image animation');
+    started = false;
+    onProgress?.call(1);
     return data;
   } finally {
     decoder.dispose();
     overlayImage?.dispose();
-    if (started) await channel.invokeMethod<void>('cancelImageAnimation');
+    if (started) {
+      try {
+        await channel.invokeMethod<void>('cancelImageAnimation');
+      } on PlatformException {
+        // Keep the original export failure if native cleanup also fails.
+      }
+    }
   }
 }
 

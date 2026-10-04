@@ -30,8 +30,11 @@ class ImageAnimationEncoder {
     fun finish(durationMs: Int): ByteArray {
         check(started) { "Image animation encoder is not initialized" }
         require(lastTimestamp >= 0 && durationMs > lastTimestamp) { "Invalid animation duration" }
-        started = false
-        return checkNotNull(encoder.nativeReleaseEncoder(durationMs)) { "Could not assemble animated WebP" }
+        try {
+            return checkNotNull(encoder.nativeReleaseEncoder(durationMs)) { "Could not assemble animated WebP" }
+        } finally {
+            cancel()
+        }
     }
 
     fun cancel() {

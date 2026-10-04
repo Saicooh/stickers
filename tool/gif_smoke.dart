@@ -64,7 +64,17 @@ Future<void> main() async {
     if (trimmedSource.duration != const Duration(milliseconds: 400)) throw StateError('Lost partial frame duration');
     // The cropped WebP must also remain usable as the saved editor background.
     await encodeImageAnimation(source: trimmedSource);
-    status.value = 'GIF_SMOKE_OK: 3 frames, timing, alpha, trim and re-encoding';
+    final snapped = await encodeImageAnimation(
+      source: source,
+      start: const Duration(microseconds: 99900),
+      end: const Duration(microseconds: 449900),
+    );
+    final snappedFile = await File('${temporary.path}/snapped.webp').writeAsBytes(snapped);
+    final snappedSource = await ImageAnimation.load(snappedFile);
+    if (snappedSource.duration != const Duration(milliseconds: 350) || snappedSource.starts.length != 2) {
+      throw StateError('Fractional trim edges changed timing');
+    }
+    status.value = 'GIF_SMOKE_OK: timing, alpha, trim, fractional edges and re-encoding';
     debugPrint(status.value);
   } catch (error, stack) {
     status.value = 'GIF_SMOKE_FAILED: $error';

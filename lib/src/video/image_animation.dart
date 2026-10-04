@@ -43,11 +43,17 @@ class ImageAnimation {
       codec.dispose();
     }
     final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-    final descriptor = await ui.ImageDescriptor.encoded(buffer);
-    final size = ui.Size(descriptor.width.toDouble(), descriptor.height.toDouble());
-    descriptor.dispose();
-    buffer.dispose();
-    return ImageAnimation._(bytes, starts, duration, size);
+    try {
+      final descriptor = await ui.ImageDescriptor.encoded(buffer);
+      try {
+        final size = ui.Size(descriptor.width.toDouble(), descriptor.height.toDouble());
+        return ImageAnimation._(bytes, starts, duration, size);
+      } finally {
+        descriptor.dispose();
+      }
+    } finally {
+      buffer.dispose();
+    }
   }
 
   Future<ui.Codec> codec({int? maxDimension}) {
