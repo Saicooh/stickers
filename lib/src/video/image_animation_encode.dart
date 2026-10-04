@@ -1,0 +1,124 @@
+import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
+import 'package:flutter/services.dart';
+
+import 'common.dart';
+import 'image_animation.dart';
+
+/// Streams straight-alpha RGBA frames to the existing libwebp encoder.
+/// No video intermediate is used, so transparent GIFs stay transparent.
+Future<Uint8List> encodeImageAnimation({
+  required ImageAnimation source,
+  Duration start = Duration.zero,
+  Duration? end,
+  ui.Rect crop = const ui.Rect.fromLTRB(0, 0, 1, 1),
+  bool stretch = false,
+  int quarterTurns = 0,
+  File? overlay,
+  WebPConfig config = const WebPConfig(lossless: true, quality: 100, method: 4),
+  int? fps,
+  void Function(double)? onProgress,
+}) async {
+  const channel = MethodChannel('de.loicezt.stickers/methods');
+  final stop = end ?? source.duration;
+  if (start < Duration.zero || stop > source.duration || stop <= start) {
+    throw ArgumentError('Invalid animation trim range');
+  }
+  final decoder = await source.codec();
+  ui.Image? overlayImage;
+  var started = false;
+  try {
+    if (overlay != null) {
+      final overlayCodec = await ui.instantiateImageCodec(await overlay.readAsBytes());
+      try {
+        overlayImage = (await overlayCodec.getNextFrame()).image;
+      } finally {
+        overlayCodec.dispose();
+      }
+    }
+    await channel.invokeMethod<void>('beginImageAnimation', {'config': config.toMap()});
+    started = true;
+    var lastTimestamp = -1;
+    for (var i = 0; i < source.starts.length; i++) {
+      final frameStart = source.starts[i];
+      if (frameStart >= stop) break;
+      final frameEnd = i + 1 < source.starts.length ? source.starts[i + 1] : source.duration;
+      final frame = await decoder.getNextFrame();
+      try {
+        if (frameEnd <= start) continue;
+        final timestamp = math.max(0, (frameStart - start).inMilliseconds);
+        if (lastTimestamp >= 0 && fps != null && timestamp - lastTimestamp < 1000 / fps) continue;
+        final pixels = await renderAnimationFrame(
+          frame.image,
+          crop: crop,
+          stretch: stretch,
+          quarterTurns: quarterTurns,
+          overlay: overlayImage,
+        );
+        await channel.invokeMethod<void>('addImageAnimationFrame', {'pixels': pixels, 'timestampMs': timestamp});
+        lastTimestamp = timestamp;
+        onProgress?.call(((frameEnd - start).inMicroseconds / (stop - start).inMicroseconds).clamp(0, 1));
+      } finally {
+        frame.image.dispose();
+      }
+    }
+    final data = await channel.invokeMethod<Uint8List>(
+      'finishImageAnimation',
+      {'durationMs': (stop - start).inMilliseconds},
+    );
+    if (data == null || data.isEmpty) throw StateError('Could not encode image animation');
+    return data;
+  } finally {
+    decoder.dispose();
+    overlayImage?.dispose();
+    if (started) await channel.invokeMethod<void>('cancelImageAnimation');
+  }
+}
+
+Future<Uint8List> renderAnimationFrame(
+  ui.Image image, {
+  ui.Rect crop = const ui.Rect.fromLTRB(0, 0, 1, 1),
+  bool stretch = false,
+  int quarterTurns = 0,
+  ui.Image? overlay,
+}) async {
+  final turns = quarterTurns % 4;
+  final width = (turns.isOdd ? image.height : image.width).toDouble();
+  final height = (turns.isOdd ? image.width : image.height).toDouble();
+  final area = ui.Rect.fromLTRB(crop.left * width, crop.top * height, crop.right * width, crop.bottom * height);
+  final sx = stretch ? 512 / area.width : math.min(512 / area.width, 512 / area.height);
+  final sy = stretch ? 512 / area.height : sx;
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  canvas.save();
+  canvas.clipRect(const ui.Rect.fromLTWH(0, 0, 512, 512));
+  canvas.translate((512 - area.width * sx) / 2, (512 - area.height * sy) / 2);
+  canvas.scale(sx, sy);
+  canvas.translate(-area.left, -area.top);
+  canvas.clipRect(area);
+  switch (turns) {
+    case 1:
+      canvas.translate(image.height.toDouble(), 0);
+    case 2:
+      canvas.translate(image.width.toDouble(), image.height.toDouble());
+    case 3:
+      canvas.translate(0, image.width.toDouble());
+  }
+  canvas.rotate(turns * math.pi / 2);
+  canvas.drawImage(image, ui.Offset.zero, ui.Paint()..filterQuality = ui.FilterQuality.medium);
+  canvas.restore();
+  if (overlay != null) canvas.drawImage(overlay, ui.Offset.zero, ui.Paint());
+  final picture = recorder.endRecording();
+  try {
+    final output = await picture.toImage(512, 512);
+    try {
+      return (await output.toByteData(format: ui.ImageByteFormat.rawStraightRgba))!.buffer.asUint8List();
+    } finally {
+      output.dispose();
+    }
+  } finally {
+    picture.dispose();
+  }
+}

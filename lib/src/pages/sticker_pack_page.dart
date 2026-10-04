@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:stickers/generated/intl/app_localizations.dart';
@@ -194,8 +195,12 @@ class StickerPackPageState extends State<StickerPackPage> {
     try {
       final ImagePicker picker = ImagePicker();
       if (widget.pack.animated) {
-        final XFile? video = await picker.pickVideo(source: ImageSource.gallery);
-        if (video == null) return;
+        final media = await FilePicker.pickFile(
+          type: FileType.custom,
+          allowedExtensions: ['gif', 'mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi', '3gp', 'mpeg', 'mpg'],
+        );
+        final path = media?.path;
+        if (path == null) return;
         if (!mounted) return;
         Navigator.pushNamed(
           context,
@@ -203,9 +208,11 @@ class StickerPackPageState extends State<StickerPackPage> {
           arguments: EditArguments(
             pack: widget.pack,
             index: index,
-            mediaPath: video.path,
+            mediaPath: path,
           ),
-        ).then((value) => setState(() {}));
+        ).then((value) {
+          if (mounted) setState(() {});
+        });
       } else {
         final XFile? image = await picker.pickImage(source: ImageSource.gallery);
         if (image == null) return; //TODO add Snackbar warning

@@ -378,7 +378,7 @@ void logWebPConfig(const WebPConfig *config) {
     LOGI("  qmax: %d", config->qmax);
     LOGI("------------------------");
 }
-JNIEXPORT void JNICALL
+JNIEXPORT jboolean JNICALL
 Java_de_loicezt_stickers_video_LibWebP_nativeAddFrame(
         JNIEnv *env,
         jobject /* this */,
@@ -387,32 +387,36 @@ Java_de_loicezt_stickers_video_LibWebP_nativeAddFrame(
 
     if (state == nullptr || state->anim_encoder == nullptr) {
         LOGE("Cannot add frame. Encoder not initialized.");
-        return;
+        return JNI_FALSE;
     }
 
     // Get a direct pointer to the pixel data from the Java ByteBuffer
     auto *pixels = static_cast<uint8_t *>(env->GetDirectBufferAddress(frameBuffer));
     if (pixels == nullptr) {
         LOGE("Failed to get direct buffer address.");
-        return;
+        return JNI_FALSE;
     }
 
     // 3. Create a WebPPicture and import the pixels
     WebPPicture pic;
     if (!WebPPictureInit(&pic)) {
         LOGE("Failed to init WebPPicture");
-        return;
+        return JNI_FALSE;
     }
     pic.width = state->frame_width;
     pic.height = state->frame_height;
     pic.use_argb = 1; // We are providing RGBA data
 
     // Import the RGBA data. The stride is the number of bytes per row.
-    WebPPictureImportRGBA(&pic, pixels, state->frame_width * 4);
+    if (!WebPPictureImportRGBA(&pic, pixels, state->frame_width * 4)) {
+        WebPPictureFree(&pic);
+        return JNI_FALSE;
+    }
 
     // 4. Add the picture to the animation encoder
     //logWebPConfig(&state->config);
-    if (!WebPAnimEncoderAdd(state->anim_encoder, &pic, timestampMs, &state->config)) {
+    const bool added = WebPAnimEncoderAdd(state->anim_encoder, &pic, timestampMs, &state->config);
+    if (!added) {
         const char *error_string = getWebPErrorString(pic.error_code);
         LOGE("Failed to add frame to WebPAnimEncoder at timestamp %d. Error: %s (%d)",
              timestampMs, error_string, pic.error_code);
@@ -421,18 +425,20 @@ Java_de_loicezt_stickers_video_LibWebP_nativeAddFrame(
     }
 
     WebPPictureFree(&pic); // Free the picture memory
+    return added ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jbyteArray JNICALL
 Java_de_loicezt_stickers_video_LibWebP_nativeReleaseEncoder(
         JNIEnv *env,
-        jobject /* this */) {
+        jobject /* this */,
+        jint endTimestampMs) {
 
 
     if (state == nullptr) { /* ... error handling ... */ return nullptr; }
 
     // Assemble the animation
-    WebPAnimEncoderAdd(state->anim_encoder, nullptr, 0, nullptr);
+    WebPAnimEncoderAdd(state->anim_encoder, nullptr, endTimestampMs, nullptr);
     WebPData webp_data;
     WebPDataInit(&webp_data);
     if (!WebPAnimEncoderAssemble(state->anim_encoder, &webp_data)) {
@@ -460,6 +466,14 @@ Java_de_loicezt_stickers_video_LibWebP_nativeReleaseEncoder(
 
     LOGI("Native encoder released.");
     return byteArray; // Return the raw data to Kotlin
+}
+
+JNIEXPORT void JNICALL
+Java_de_loicezt_stickers_video_LibWebP_nativeAbortEncoder(JNIEnv *, jobject) {
+    if (state == nullptr) return;
+    WebPAnimEncoderDelete(state->anim_encoder);
+    delete state;
+    state = nullptr;
 }
 
 } // extern "C"

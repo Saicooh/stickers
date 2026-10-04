@@ -11,10 +11,11 @@ import 'package:stickers/src/globals.dart';
 import 'package:stickers/src/pages/crop_page.dart';
 import 'package:stickers/src/pages/default_page.dart';
 import 'package:stickers/src/util.dart';
+import 'package:stickers/src/video/animated_media_controller.dart';
 import 'package:stickers/src/video/common.dart';
 import 'package:stickers/src/video/crop_scale.dart';
+import 'package:stickers/src/video/image_animation_encode.dart';
 import 'package:stickers/src/video/trim_range.dart';
-import 'package:stickers/src/video/video_timeline.dart';
 import 'package:stickers/src/widgets/video_crop_overlay.dart';
 import 'package:stickers/src/widgets/video_trim_timeline.dart';
 import 'package:video_player/video_player.dart';
@@ -37,7 +38,7 @@ class VideoCropPage extends StatefulWidget {
 }
 
 class _VideoCropPageState extends State<VideoCropPage> {
-  late final VideoPlayerController _controller;
+  late final AnimatedMediaController _controller;
   bool _ready = false;
   bool _exporting = false;
   RangeValues _range = const RangeValues(0, 1);
@@ -56,7 +57,6 @@ class _VideoCropPageState extends State<VideoCropPage> {
   bool _playFromSelectionStart = false;
   TrimEdge _selectedEdge = TrimEdge.start;
   List<Uint8List?> _thumbnails = [];
-  final VideoTimelineService _timelineService = VideoTimelineService();
   final ValueNotifier<Rect> _crop = ValueNotifier(const Rect.fromLTRB(0, 0, 1, 1));
   double? _aspectRatio;
   bool _stretch = false;
@@ -65,14 +65,9 @@ class _VideoCropPageState extends State<VideoCropPage> {
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.file(
-      File(widget.imagePath),
-      viewType: VideoViewType.textureView,
-      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-    );
+    _controller = AnimatedMediaController(File(widget.imagePath));
     _initializeVideo();
     _controller.addListener(_videoListener);
-    _controller.setVolume(0);
   }
 
   Future<void> _initializeVideo() async {
@@ -82,7 +77,7 @@ class _VideoCropPageState extends State<VideoCropPage> {
         setState(() => _ready = true);
         _loadThumbnails();
       }
-    } on Exception catch (e) {
+    } catch (e) {
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -97,7 +92,7 @@ class _VideoCropPageState extends State<VideoCropPage> {
 
   Future<void> _loadThumbnails() async {
     try {
-      final frames = await _timelineService.thumbnails(widget.imagePath);
+      final frames = await _controller.thumbnails();
       if (mounted) setState(() => _thumbnails = frames);
     } on Exception {
       // The time controls remain usable if a decoder cannot produce previews.
@@ -176,7 +171,7 @@ class _VideoCropPageState extends State<VideoCropPage> {
                                 fit: StackFit.expand,
                                 children: [
                                   RepaintBoundary(
-                                    child: RotatedBox(quarterTurns: _quarterTurns, child: VideoPlayer(_controller)),
+                                    child: RotatedBox(quarterTurns: _quarterTurns, child: _controller.preview()),
                                   ),
                                   IgnorePointer(
                                     ignoring: _exporting,
@@ -460,7 +455,7 @@ class _VideoCropPageState extends State<VideoCropPage> {
       final duration = _controller.value.duration;
       final edge = _selectedEdge;
       final boundary = duration * (edge == TrimEdge.start ? _range.start : _range.end);
-      final adjacent = await _timelineService.adjacentFrame(widget.imagePath, boundary, direction);
+      final adjacent = await _controller.adjacentFrame(boundary, direction);
       if (!mounted) return;
       // The final frame's right edge is the video duration, not another sample timestamp.
       final frame = edge == TrimEdge.end && direction > 0 && adjacent == boundary ? duration : adjacent;
@@ -578,19 +573,32 @@ class _VideoCropPageState extends State<VideoCropPage> {
     });
     try {
       _shouldPlaySegment = false;
-      _controller.pause();
-      final output = "$mediaCacheDir/import_${uid()}.mp4";
-      await service.start(
-        inputFile: widget.imagePath,
-        outputFile: output,
-        start: _controller.value.duration * _range.start,
-        end: _controller.value.duration * _range.end,
-        crop: _crop.value,
-        stretch: _stretch,
-        quarterTurns: _quarterTurns,
-      );
-      final progress = await completion.future.timeout(const Duration(minutes: 3));
-      if (progress.status != Status.SUCCESS) throw Exception(trimFailedMessage);
+      await _controller.pause();
+      final animation = _controller.animation;
+      final output = "$mediaCacheDir/import_${uid()}.${animation == null ? 'mp4' : 'webp'}";
+      if (animation != null) {
+        final data = await encodeImageAnimation(
+          source: animation,
+          start: _controller.value.duration * _range.start,
+          end: _controller.value.duration * _range.end,
+          crop: _crop.value,
+          stretch: _stretch,
+          quarterTurns: _quarterTurns,
+        );
+        await File(output).writeAsBytes(data);
+      } else {
+        await service.start(
+          inputFile: widget.imagePath,
+          outputFile: output,
+          start: _controller.value.duration * _range.start,
+          end: _controller.value.duration * _range.end,
+          crop: _crop.value,
+          stretch: _stretch,
+          quarterTurns: _quarterTurns,
+        );
+        final progress = await completion.future.timeout(const Duration(minutes: 3));
+        if (progress.status != Status.SUCCESS) throw Exception(trimFailedMessage);
+      }
       if (!mounted) return;
       Navigator.of(context).pushNamed(
         "/edit",
@@ -601,7 +609,7 @@ class _VideoCropPageState extends State<VideoCropPage> {
           type: .video,
         ),
       );
-    } on Exception catch (e) {
+    } catch (e) {
       if (mounted) {
         showDialog<void>(
           context: context,

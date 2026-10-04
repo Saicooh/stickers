@@ -129,13 +129,15 @@ class LibWebP {
      * @param frameBuffer A direct ByteBuffer containing the RGBA pixel data.
      * @param timestampMs The timestamp for this frame in milliseconds.
      */
-    external fun nativeAddFrame(frameBuffer: ByteBuffer, timestampMs: Int)
+    external fun nativeAddFrame(frameBuffer: ByteBuffer, timestampMs: Int): Boolean
 
     /**
      * Finalizes the WebP file, writes it to disk, and cleans up resources.
      * @return The path to the output file if successful, otherwise null.
      */
-    external fun nativeReleaseEncoder(): ByteArray?
+    external fun nativeReleaseEncoder(endTimestampMs: Int = 0): ByteArray?
+
+    external fun nativeAbortEncoder()
 
     companion object {
         init {

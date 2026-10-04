@@ -7,6 +7,7 @@ import android.os.Build
 import androidx.annotation.NonNull
 import androidx.annotation.RequiresApi
 import de.loicezt.stickers.video.CropAndScale
+import de.loicezt.stickers.video.ImageAnimationEncoder
 import de.loicezt.stickers.video.OverlayAndEncode
 import de.loicezt.stickers.video.VideoTimeline
 import de.loicezt.stickers.video.WebPConfig
@@ -29,6 +30,7 @@ class MainActivity : FlutterActivity() {
 
     private lateinit var cropAndScale: CropAndScale
     private lateinit var overlayAndEncode: OverlayAndEncode
+    private val imageAnimationEncoder = ImageAnimationEncoder()
     private val scope = CoroutineScope(
         Dispatchers.Main + SupervisorJob()
     )
@@ -82,6 +84,40 @@ class MainActivity : FlutterActivity() {
             METHOD_CHANNEL_NAME
         ).setMethodCallHandler { call, result ->
             when (call.method) {
+                "beginImageAnimation", "addImageAnimationFrame", "finishImageAnimation", "cancelImageAnimation" -> {
+                    scope.launch {
+                        try {
+                            val response = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                                when (call.method) {
+                                    "beginImageAnimation" -> {
+                                        imageAnimationEncoder.begin(
+                                            WebPConfig.fromMap(call.argument<Map<*, *>>("config")!!)
+                                        )
+                                        null
+                                    }
+                                    "addImageAnimationFrame" -> {
+                                        imageAnimationEncoder.add(
+                                            call.argument<ByteArray>("pixels")!!,
+                                            call.argument<Int>("timestampMs")!!
+                                        )
+                                        null
+                                    }
+                                    "finishImageAnimation" -> imageAnimationEncoder.finish(
+                                        call.argument<Int>("durationMs")!!
+                                    )
+                                    else -> {
+                                        imageAnimationEncoder.cancel()
+                                        null
+                                    }
+                                }
+                            }
+                            result.success(response)
+                        } catch (e: Exception) {
+                            result.error("IMAGE_ANIMATION", e.message, null)
+                        }
+                    }
+                }
+
                 "startTrim" -> {
                     try {
                         val args = call.arguments as Map<*, *>

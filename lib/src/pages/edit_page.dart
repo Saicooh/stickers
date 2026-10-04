@@ -21,12 +21,13 @@ import 'package:stickers/src/fonts_api/fonts_registry.dart';
 import 'package:stickers/src/globals.dart';
 import 'package:stickers/src/pages/crop_page.dart';
 import 'package:stickers/src/pages/default_page.dart';
+import 'package:stickers/src/video/animated_media_controller.dart';
 import 'package:stickers/src/video/common.dart';
+import 'package:stickers/src/video/image_animation_encode.dart';
 import 'package:stickers/src/video/overlay_encode.dart';
 import 'package:stickers/src/widgets/draw_layer.dart';
 import 'package:stickers/src/widgets/text_layer.dart';
 import 'package:vector_math/vector_math_64.dart' hide Colors;
-import 'package:video_player/video_player.dart';
 
 import '../util.dart';
 
@@ -85,30 +86,41 @@ class _EditPageState extends State<EditPage> {
       _source = File(widget.mediaPath!);
     }
     if (widget.mediaType == MediaType.video) {
-      _controller = VideoPlayerController.file(
-        _source,
-        viewType: VideoViewType.textureView,
-        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-      );
+      _controller = AnimatedMediaController(_source);
       _controller.setLooping(true);
-      _controller.setVolume(0);
       _controller.initialize().then((_) {
+        if (!mounted) return;
         _controller.play();
         setState(() {});
+      }).catchError((Object error) {
+        if (!mounted) return;
+        showDialog<void>(
+          context: context,
+          builder: (context) => ErrorDialog(
+            title: AppLocalizations.of(context)!.couldntLoadMedia,
+            message: error.toString(),
+          ),
+        );
       });
     }
   }
 
   final GlobalKey _rbKey = GlobalKey();
   bool _exporting = false;
-  late VideoPlayerController _controller;
+  late AnimatedMediaController _controller;
+
+  @override
+  void dispose() {
+    if (widget.mediaType == MediaType.video) _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) {
+        if (didPop || _exporting) {
           return;
         }
         bool shouldPop = await showDialog<bool>(
@@ -310,7 +322,7 @@ class _EditPageState extends State<EditPage> {
                                   Center(
                                     child: AspectRatio(
                                       aspectRatio: _controller.value.aspectRatio,
-                                      child: VideoPlayer(_controller),
+                                      child: _controller.preview(),
                                     ),
                                   ),
                                 ..._layers.map(
@@ -568,6 +580,7 @@ class _EditPageState extends State<EditPage> {
       if (widget.mediaType == MediaType.picture) {
         data = (await ImageEditor.editFileImage(file: _source, imageEditorOption: option))!;
       } else {
+        if (!_controller.value.isInitialized) throw Exception(AppLocalizations.of(context)!.couldntLoadMedia);
         data = await exportAnimatedSticker(option, context);
       }
       final editorData = EditorData(background: _source.path, layers: _layers);
@@ -579,7 +592,7 @@ class _EditPageState extends State<EditPage> {
       if (!context.mounted) return;
       Navigator.of(context).pop();
       Navigator.of(context).pop();
-    } on Exception catch (e) {
+    } catch (e) {
       if (mounted) {
         showDialog(
             context: context,
@@ -593,9 +606,7 @@ class _EditPageState extends State<EditPage> {
     } finally {
       //This is useless if the screen goes away but useful for debugging
       denormalizeTexts();
-      setState(() {
-        _exporting = false;
-      });
+      if (mounted) setState(() => _exporting = false);
     }
     return;
   }
@@ -615,6 +626,33 @@ class _EditPageState extends State<EditPage> {
     final transparent = await rootBundle.load("assets/transparent.webp");
     final out =
         await ImageEditor.editImageAndGetFile(image: transparent.buffer.asUint8List(), imageEditorOption: option);
+    if (_controller.animation != null) {
+      try {
+        await _controller.pause();
+        for (var attempt = 0; attempt < 3; attempt++) {
+          if (!mounted) throw StateError('Editor was closed');
+          setState(() => _message = AppLocalizations.of(context)!.exporting);
+          final data = await encodeImageAnimation(
+            source: _controller.animation!,
+            overlay: out,
+            config: WebPConfig(lossless: false, quality: 60 - attempt * 20, alphaCompression: 1, method: 4),
+            fps: attempt == 0 ? null : 24 ~/ attempt,
+            onProgress: (progress) {
+              if (mounted) setState(() => _exportProgress = progress);
+            },
+          );
+          if (data.lengthInBytes <= 500 * 1024) return data;
+        }
+        if (!context.mounted) throw StateError('Editor was closed');
+        throw Exception(AppLocalizations.of(context)!.stickerTooLargeMsg);
+      } finally {
+        await out.delete();
+        if (mounted) {
+          setState(() => _message = null);
+          _controller.play();
+        }
+      }
+    }
     final service = OverlayAndEncodeService();
     final output = File("$mediaCacheDir/exported_${uid()}.webp");
     Stopwatch sw = Stopwatch()..start();
